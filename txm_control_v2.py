@@ -4,15 +4,22 @@ import numpy as np
 import os
 import threading
 import time
-from PyQt5 import QtGui
+from PyQt5 import QtGui, QtCore
 from PyQt5.QtWidgets import (QMainWindow, QFileDialog, QRadioButton, QApplication, QWidget, QFrame,
                              QLineEdit, QPlainTextEdit, QWidget, QPushButton, QLabel, QCheckBox, QGroupBox,
                              QScrollBar, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget,
                              QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea,
                              QSlider, QComboBox, QButtonGroup, QMessageBox, QSizePolicy)
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QFont
-from PyQt5 import QtCore
-from scan_list import *
+from qtconsole.rich_jupyter_widget import RichIPythonWidget, RichJupyterWidget
+from qtconsole.inprocess import QtInProcessKernelManager
+#from IPython.lib import guisupport
+from qtconsole.manager import QtKernelManager
+#from IPython import get_ipython
+#from scan_list import *
+import threading
+
+get_ipython().run_line_magic("run", "-i /nsls2/data/fxi-new/shared/software/fxi_control/scan_list.py")
 
 global txm, CALIBER
 
@@ -108,6 +115,90 @@ def motor_list(n=1):
         return 0
 
 
+def make_jupyter_widget_with_kernel():
+    """Start a kernel, connect to it, and create a RichJupyterWidget to use it
+    """
+    kernel_manager = QtKernelManager(kernel_name='python3')
+    kernel_manager.start_kernel()
+
+    kernel_client = kernel_manager.client()
+    kernel_client.start_channels()
+
+    jupyter_widget = RichJupyterWidget()
+    jupyter_widget.kernel_manager = kernel_manager
+    jupyter_widget.kernel_client = kernel_client
+    return jupyter_widget
+
+
+class ConsoleWidget(RichIPythonWidget):
+    def __init__(self, namespace={}, customBanner=None, *args, **kwargs):
+        super(ConsoleWidget, self).__init__(*args, **kwargs)
+
+        if customBanner is not None:
+            self.banner = customBanner
+
+        #self.set_default_style('linux')
+        #self.font_size = 20
+ 
+        self.kernel_manager = QtInProcessKernelManager()
+        self.kernel_manager.start_kernel(show_banner=False)
+
+        self.kernel = self.kernel_manager.kernel        
+        self.kernel.gui = 'qt'
+
+        self.kernel_client = kernel_client = self._kernel_manager.client()
+        self.kernel_client.start_channels()
+        
+        #self.push_vars(namespace)
+        #kernel.shell.push({'foo': 43, 'print_process_id': print_process_id})
+        #fn = '/home/gemy/.ipython/profile_default/startup/00.py'
+        #kernel.shell.safe_execfile(fn, kernel.shell.user_global_ns)  
+        #print(fn)
+        
+        '''
+        self.set_default_style('linux')
+        self.font = QtGui.QFont(self.font.family(), 16);
+        '''
+        
+        def stop():
+            self.kernel_client.stop_channels()
+            self.kernel_manager.shutdown_kernel()
+            guisupport.get_app_qt().exit()
+
+        self.exit_requested.connect(stop)
+
+
+    def execfile(self, fn):
+        self.kernel.shell.safe_execfile(fn, self.kernel.shell.user_global_ns)
+
+    def push_vars(self, variableDict):
+        """
+        Given a dictionary containing name / value pairs, push those variables
+        to the Jupyter console widget
+        """
+        self.kernel_manager.kernel.shell.push(variableDict)
+
+    def clear(self):
+        """
+        Clears the terminal
+        """
+        self._control.clear()
+
+        # self.kernel_manager
+
+    def print_text(self, text):
+        """
+        Prints some plain text to the console
+        """
+        self._append_plain_text(text)
+
+    def execute_command(self, command):
+        """
+        Execute a command in the frame of the console widget
+        """
+        self._execute(command, False)
+
+
 class App(QWidget):
     def __init__(self):
         super().__init__()
@@ -130,8 +221,8 @@ class App(QWidget):
     def initUI(self):
         self.setWindowTitle(self.title)
         self.setGeometry(self.left, self.top, self.width, self.height)
-        self.font1 = QtGui.QFont('Arial', 12.5, QtGui.QFont.Bold)
-        self.font2 = QtGui.QFont('Arial', 12.5, QtGui.QFont.Normal)
+        self.font1 = QtGui.QFont('Arial', 12, QtGui.QFont.Bold)
+        self.font2 = QtGui.QFont('Arial', 12, QtGui.QFont.Normal)
         self.fpath = os.getcwd()
         self.pos = {}
         self.sample_pos = {}
@@ -884,24 +975,78 @@ class App(QWidget):
     def vbox_scan_cmd(self):
         self.lb_scan_msg = QLabel()
         self.lb_scan_msg.setFixedWidth(500)
-        self.lb_scan_msg.setText("Scan command / Message:")
+        self.lb_scan_msg.setText("\nScan command / Message:\n")
         self.tx_scan_msg = QPlainTextEdit()
-        self.tx_scan_msg.setFixedWidth(1000)
-        self.tx_scan_msg.setFixedHeight(160)
+        self.tx_scan_msg.setFixedWidth(600)
+        self.tx_scan_msg.setFixedHeight(200)
         self.tx_scan_msg.setFont(self.font2)
+        
+        lb_ipython_msg1 = QLabel()
+        lb_ipython_msg1.setFont(self.font1)
+        lb_ipython_msg1.setFixedWidth(300)        
+        lb_ipython_msg1.setText('To start, run this command first:')
 
+        lb_ipython_msg2 = QLabel()
+        lb_ipython_msg2.setFont(self.font1)
+        lb_ipython_msg2.setFixedWidth(300)
+        lb_ipython_msg2.setText('Before any scan, update scan-id by:')
+
+        tx_ipython_msg1 = QLineEdit()
+        tx_ipython_msg1.setFont(self.font2)
+        tx_ipython_msg1.setFixedWidth(400)
+        tx_ipython_msg1.setText('%run -i load_base.py')
+
+        tx_ipython_msg2 = QLineEdit()
+        tx_ipython_msg2.setFont(self.font2)
+        tx_ipython_msg2.setFixedWidth(400)
+        tx_ipython_msg2.setText('RE.md["scan_id"] = db[-1].start["scan_id"]')
+
+        hbox_ipython1 = QHBoxLayout()
+        hbox_ipython1.addWidget(lb_ipython_msg1)
+        hbox_ipython1.addWidget(tx_ipython_msg1)
+        hbox_ipython1.addStretch()
+        hbox_ipython1.setAlignment(QtCore.Qt.AlignLeft)
+
+        hbox_ipython2 = QHBoxLayout()
+        hbox_ipython2.addWidget(lb_ipython_msg2)
+        hbox_ipython2.addWidget(tx_ipython_msg2)
+        hbox_ipython2.addStretch()
+        hbox_ipython2.setAlignment(QtCore.Qt.AlignLeft)
+    
+        #self.ip_widget = ConsoleWidget()
+        self.ip_widget = make_jupyter_widget_with_kernel()        
+        self.ip_widget.setFixedWidth(1000)
+        self.ip_widget.setFixedHeight(260)
+        self.ip_widget.set_default_style('linux')
+        self.ip_widget.font = QtGui.QFont(self.ip_widget.font.family(), 11);
+        
+        #fn = '/home/mingyuan/Work/txm_control/00_base.py'
+        #self.ip_widget.execfile(fn)
         hbox_run_sid = self.hbox_run_sid()
+        vbox1 = QVBoxLayout()
+        vbox1.addWidget(self.lb_scan_msg)
+        vbox1.addWidget(self.tx_scan_msg)
+        vbox1.addLayout(hbox_run_sid)
+        vbox1.addStretch()
+
+        vbox2 = QVBoxLayout()
+        vbox2.addLayout(hbox_ipython1)
+        vbox2.addLayout(hbox_ipython2)
+        vbox2.addWidget(self.ip_widget)
+        vbox2.addStretch()
 
         hbox = QHBoxLayout()
-        hbox.addWidget(self.tx_scan_msg)
-        hbox.addLayout(hbox_run_sid)
+        hbox.addLayout(vbox1)
+        hbox.addLayout(vbox2)
         hbox.addStretch()
-
-        vbox = QVBoxLayout()
-        vbox.addWidget(self.lb_scan_msg)
-        vbox.addLayout(hbox)
-        vbox.setAlignment(QtCore.Qt.AlignTop)
-        return vbox
+        #hbox.setAlignment(QtCore.Qt.AlignLeft)
+        #vbox = QVBoxLayout()
+        #vbox.addWidget(self.lb_scan_msg)
+        #vbox.addLayout(hbox)
+        #vbox.addWidget(self.ip_widget)
+        
+        #vbox.setAlignment(QtCore.Qt.AlignTop)
+        return hbox
 
     def hbox_run_sid(self):
         lb_empty = QLabel()
@@ -909,14 +1054,23 @@ class App(QWidget):
 
         self.pb_run_scan = QPushButton('Run')
         self.pb_run_scan.setFont(self.font1)
-        self.pb_run_scan.setFixedHeight(160)
+        self.pb_run_scan.setFixedHeight(50)
         self.pb_run_scan.setFixedWidth(120)
         #self.pb_run_scan.setDisabled(True)
         self.pb_run_scan.setStyleSheet('color: rgb(200, 50, 50);')
         self.pb_run_scan.clicked.connect(self.run_scan)
 
+        self.pb_abort_scan = QPushButton('Abort')
+        self.pb_abort_scan.setFont(self.font1)
+        self.pb_abort_scan.setFixedHeight(50)
+        self.pb_abort_scan.setFixedWidth(100)
+        #self.pb_run_scan.setDisabled(True)
+        self.pb_abort_scan.setStyleSheet('color: rgb(200, 50, 50);')
+        #self.pb_abort_scan.clicked.connect(self.run_scan)
+
         lb_sid = QLabel()
         lb_sid.setText('Latest scan ID:')
+        lb_sid.setAlignment(QtCore.Qt.AlignRight)
         lb_sid.setFont(self.font1)
         lb_sid.setFixedWidth(160)
 
@@ -927,27 +1081,36 @@ class App(QWidget):
         self.lb_current_sid.setStyleSheet('color: rgb(200, 50, 50);')
 
         self.tx_sid = QLineEdit()
-        self.tx_sid.setFixedWidth(100)
+        self.tx_sid.setFixedWidth(120)
         self.tx_sid.setFont(self.font2)
         self.tx_sid.setValidator(QIntValidator())
 
-        self.pb_sid = QPushButton('reset to:')
+        self.pb_sid = QPushButton('Reset scan ID to:')
         self.pb_sid.clicked.connect(self.reset_sid)
         self.pb_sid.setFont(self.font2)
-        self.pb_sid.setFixedWidth(100)
+        self.pb_sid.setFixedWidth(160)
+
+        hbox1 = QHBoxLayout()
+        hbox1.addWidget(lb_sid)
+        hbox1.addWidget(self.lb_current_sid)
+        hbox1.addStretch()
+
+        hbox2 = QHBoxLayout()
+        hbox2.addWidget(self.pb_sid)
+        hbox2.addWidget(self.tx_sid)
+        hbox2.addStretch()
 
         vbox = QVBoxLayout()
-        vbox.addWidget(lb_sid)
-        vbox.addWidget(self.lb_current_sid)
-        vbox.addWidget(lb_empty)
-        vbox.addWidget(self.pb_sid)
-        vbox.addWidget(self.tx_sid)
+        vbox.addLayout(hbox1)
+        vbox.addLayout(hbox2)
         vbox.addStretch()
 
         hbox = QHBoxLayout()
         hbox.addWidget(self.pb_run_scan)
+        hbox.addWidget(self.pb_abort_scan)
         hbox.addLayout(vbox)
-
+        
+        hbox.addStretch()
         return hbox
 
     def vbox_lst_pre_defined_scan(self):
@@ -1988,6 +2151,10 @@ class App(QWidget):
             self.use_current_eng()
             eng = eval(self.scan_tx['XEng'].text())
 
+
+        cmd_check_sid = 'RE.md["scan_id"] = db[-1].start["scan_id"]'
+        cmd_all += cmd_check_sid + '\n'
+
         self.txm_scan['XEng'] = eng
         cmd_move_eng = f'RE(move_zp_ccd({eng}))'
         cmd_all += cmd_move_eng + '\n'
@@ -2311,7 +2478,7 @@ class App(QWidget):
             flag_multi_pos_scan = 1
         else:
             flag_multi_pos_scan = 0
-        cmd = ''
+        cmd = 'RE.md["scan_id"] = db[-1].start["scan_id"]\n'
         scan = self.txm_record_scan[scan_name]
         for k in scan.keys():
             if k == 'name' or k == 'pos' or k == 'XEng':
@@ -2865,9 +3032,22 @@ class App(QWidget):
 
 
 
+def run_main():
+    app = QApplication(sys.argv)
+    txm = App()
+    txm.show()
+    sys.exit(app.exec_())
+
 
 if __name__ == '__main__':
-   app = QApplication(sys.argv)
-   txm = App()
-   txm.show()
-   sys.exit(app.exec_())
+    run_main()
+    '''
+    t = threading.Thread(target=run_main)
+    t.daemon = True
+    t.start()
+    
+    app = QApplication(sys.argv)
+    txm = App()
+    txm.show()
+    sys.exit(app.exec_())
+    '''
