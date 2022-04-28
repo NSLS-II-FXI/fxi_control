@@ -5,6 +5,7 @@ import os
 import threading
 import time
 from PyQt5 import QtGui, QtCore
+from PyQt5.QtCore import QThread, QObject, pyqtSignal
 from PyQt5.QtWidgets import (QMainWindow, QFileDialog, QRadioButton, QApplication, QWidget, QFrame,
                              QLineEdit, QPlainTextEdit, QWidget, QPushButton, QLabel, QCheckBox, QGroupBox,
                              QScrollBar, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget,
@@ -18,6 +19,8 @@ from qtconsole.manager import QtKernelManager
 #from IPython import get_ipython
 #from scan_list import *
 import threading
+import bluesky.plan_stubs as bps
+
 
 get_ipython().run_line_magic("run", "-i /nsls2/data/fxi-new/shared/software/fxi_control/scan_list.py")
 
@@ -199,6 +202,43 @@ class ConsoleWidget(RichIPythonWidget):
         self._execute(command, False)
 
 
+
+
+class Xyze_motor(QObject):
+    def __init__(self, obj):
+        super().__init__()
+        self.obj = obj
+    def run(self):
+        x = zps.sx.position
+        y = zps.sy.position
+        z = zps.sz.position
+        r = zps.pi_r.position
+        eng = XEng.position
+        self.obj.lb_motor_pos_x.setText(f'{x:5.4f}')
+        self.obj.lb_motor_pos_y.setText(f'{y:5.4f}')
+        self.obj.lb_motor_pos_z.setText(f'{z:5.4f}')
+        self.obj.lb_motor_pos_r.setText(f'{r:5.4f}')
+        self.obj.lb_motor_pos_e.setText(f'{eng:2.5f}')
+        time.sleep(0.2)
+
+
+class Beam_current_status(QObject):
+    def __init__(self, obj):
+        super().__init__()
+        self.obj = obj
+    def run(self):
+        beam_value = beam_current.read()['beam_current']['value']
+        shutter_value = shutter_status.read()['shutter_status']['value']
+        if shutter_value == 1:
+            sh_status = 'Closed' 
+            stylesheet = 'color: rgb(200, 50, 50)' # display red
+        else:
+            sh_status = 'Open' 
+            stylesheet = 'color: rgb(50, 200, 50)' # display green
+        self.obj.lb_beam_current.setText(f'{beam_value:3.1f} mA')
+        self.obj.lb_shutter_status.setText(sh_status)
+        self.obj.lb_shutter_status.setStyleSheet(stylesheet)
+
 class App(QWidget):
     def __init__(self):
         super().__init__()
@@ -211,13 +251,29 @@ class App(QWidget):
         self.top = (height - self.height) // 2
         self.initUI()
         self.global_sync()
+        self.beam_shutter_sync()
         self.display_calib_eng_only()
 
+    '''
     def global_sync(self):
         thread = threading.Thread(target=self.repeat_pos_sync, args=())
         thread.daemon = True
         thread.start()
+    '''
+    def global_sync(self):
+        self.thread_pos = QThread()
+        self.xyze_motor = Xyze_motor(obj=self)
+        self.xyze_motor.moveToThread(self.thread_pos)        
+        self.thread_pos.started.connect(self.xyze_motor.run)
+        self.thread_pos.start()
 
+    def beam_shutter_sync(self):
+        self.thread_beam_shutter = QThread()
+        self.beam_current_status = Beam_current_status(obj=self)
+        self.beam_current_status.moveToThread(self.thread_beam_shutter)        
+        self.thread_beam_shutter.started.connect(self.beam_current_status.run)
+        self.thread_beam_shutter.start()
+    
     def initUI(self):
         self.setWindowTitle(self.title)
         self.setGeometry(self.left, self.top, self.width, self.height)
@@ -278,6 +334,8 @@ class App(QWidget):
     def layout_motor(self):
         lb_empty = QLabel()
         lb_empty.setFixedWidth(40)
+        lb_empty1 = QLabel()
+        lb_empty1.setFixedWidth(40)
         gpbox = QGroupBox('Sample position')
         gpbox.setFont(self.font1)
         #gpbox.setStyleSheet('color: rgb(0, 80, 255);')
@@ -286,6 +344,8 @@ class App(QWidget):
         hbox_motor.addWidget(lb_empty)
         #hbox_motor.addLayout(self.vbox_motor_step())
         hbox_motor.addLayout(self.vbox_pos_list())
+        hbox_motor.addWidget(lb_empty)
+        hbox_motor.addLayout(self.vbox_beam_shutter())
         hbox_motor.setAlignment(QtCore.Qt.AlignLeft)
         hbox_motor.addStretch()
         vbox_motor = QVBoxLayout()
@@ -876,6 +936,67 @@ class App(QWidget):
         vbox_lst.setAlignment(QtCore.Qt.AlignTop)
         return vbox_lst
 
+    def vbox_beam_shutter(self):
+        lb_beam = QLabel()
+        lb_beam.setText('Beam current:')
+        lb_beam.setFont(self.font1)
+        lb_beam.setFixedWidth(120)
+        
+        self.lb_beam_current = QLabel()
+        #self.lb_beam_current.setText('Beam current:')
+        self.lb_beam_current.setFixedWidth(120)
+        self.lb_beam_current.setFont(self.font1)
+        self.lb_beam_current.setStyleSheet('color: rgb(200, 50, 50);')
+
+        hbox_beam = QHBoxLayout()
+        hbox_beam.addWidget(lb_beam)
+        hbox_beam.addWidget(self.lb_beam_current)
+        hbox_beam.setAlignment(QtCore.Qt.AlignLeft)
+
+        lb_shutter = QLabel()
+        lb_shutter.setText('Shutter status:')
+        lb_shutter.setFixedHeight(40)
+        lb_shutter.setFont(self.font1)
+        lb_shutter.setFixedWidth(120)
+
+        self.lb_shutter_status = QLabel()
+        self.lb_shutter_status.setFixedWidth(120)
+        self.lb_shutter_status.setFixedHeight(40)
+        self.lb_shutter_status.setFont(self.font1)
+        self.lb_shutter_status.setStyleSheet('color: rgb(200, 50, 50);')
+
+        hbox_shutter = QHBoxLayout()
+        hbox_shutter.addWidget(lb_shutter)
+        hbox_shutter.addWidget(self.lb_shutter_status)
+        hbox_shutter.setAlignment(QtCore.Qt.AlignLeft)
+
+        self.pb_open_shutter = QPushButton("Open shutter")
+        self.pb_open_shutter.setFont(self.font2)
+        self.pb_open_shutter.setFixedHeight(40)
+        self.pb_open_shutter.setFixedWidth(120)
+        self.pb_open_shutter.clicked.connect(self.open_shutter)
+
+        self.pb_close_shutter = QPushButton("Close shutter")
+        self.pb_close_shutter.setFont(self.font2)
+        self.pb_close_shutter.setFixedHeight(40)
+        self.pb_close_shutter.setFixedWidth(120)
+        self.pb_close_shutter.clicked.connect(self.close_shutter)
+
+        hbox_shutter_click = QHBoxLayout()
+        hbox_shutter_click.addWidget(self.pb_open_shutter)
+        hbox_shutter_click.addWidget(self.pb_close_shutter)
+        hbox_shutter_click.setAlignment(QtCore.Qt.AlignLeft)
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(hbox_beam)
+        vbox.addLayout(hbox_shutter)
+        vbox.addLayout(hbox_shutter_click)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+        return vbox
+
+
+
     #############################
 
     def layout_scan(self):
@@ -975,21 +1096,25 @@ class App(QWidget):
     def vbox_scan_cmd(self):
         self.lb_scan_msg = QLabel()
         self.lb_scan_msg.setFixedWidth(500)
-        self.lb_scan_msg.setText("\nScan command / Message:\n")
+        self.lb_scan_msg.setText("Scan command / Message:")
         self.tx_scan_msg = QPlainTextEdit()
         self.tx_scan_msg.setFixedWidth(600)
-        self.tx_scan_msg.setFixedHeight(200)
+        self.tx_scan_msg.setFixedHeight(240)
         self.tx_scan_msg.setFont(self.font2)
+
+        tx_empty = QLineEdit()
+        tx_empty.setVisible(False)
+        tx_empty.setEnabled(False)
         
         lb_ipython_msg1 = QLabel()
         lb_ipython_msg1.setFont(self.font1)
-        lb_ipython_msg1.setFixedWidth(300)        
-        lb_ipython_msg1.setText('To start, run this command first:')
+        lb_ipython_msg1.setFixedWidth(450)        
+        lb_ipython_msg1.setText('To initiate scan environment, run this command first:')
 
         lb_ipython_msg2 = QLabel()
         lb_ipython_msg2.setFont(self.font1)
-        lb_ipython_msg2.setFixedWidth(300)
-        lb_ipython_msg2.setText('Before any scan, update scan-id by:')
+        lb_ipython_msg2.setFixedWidth(450)
+        lb_ipython_msg2.setText('If witch from GUI, before any scan, update scan-id by:')
 
         tx_ipython_msg1 = QLineEdit()
         tx_ipython_msg1.setFont(self.font2)
@@ -1016,15 +1141,24 @@ class App(QWidget):
         #self.ip_widget = ConsoleWidget()
         self.ip_widget = make_jupyter_widget_with_kernel()        
         self.ip_widget.setFixedWidth(1000)
-        self.ip_widget.setFixedHeight(260)
+        self.ip_widget.setFixedHeight(300)
         self.ip_widget.set_default_style('linux')
-        self.ip_widget.font = QtGui.QFont(self.ip_widget.font.family(), 11);
+        self.ip_widget.font = QtGui.QFont(self.ip_widget.font.family(), 12);
         
         #fn = '/home/mingyuan/Work/txm_control/00_base.py'
         #self.ip_widget.execfile(fn)
         hbox_run_sid = self.hbox_run_sid()
+        hbox_scan_id = self.hbox_scan_id()
+
+        hbox_commd_msg = QHBoxLayout()
+        hbox_commd_msg.addWidget(self.lb_scan_msg)
+        hbox_commd_msg.addWidget(tx_empty)
+        hbox_commd_msg.setAlignment(QtCore.Qt.AlignLeft)
+        hbox_commd_msg.addStretch()
+
         vbox1 = QVBoxLayout()
-        vbox1.addWidget(self.lb_scan_msg)
+        vbox1.addLayout(hbox_commd_msg)
+        vbox1.addLayout(hbox_scan_id)
         vbox1.addWidget(self.tx_scan_msg)
         vbox1.addLayout(hbox_run_sid)
         vbox1.addStretch()
@@ -1054,30 +1188,71 @@ class App(QWidget):
 
         self.pb_run_scan = QPushButton('Run')
         self.pb_run_scan.setFont(self.font1)
-        self.pb_run_scan.setFixedHeight(50)
+        self.pb_run_scan.setFixedHeight(40)
         self.pb_run_scan.setFixedWidth(120)
         #self.pb_run_scan.setDisabled(True)
         self.pb_run_scan.setStyleSheet('color: rgb(200, 50, 50);')
         self.pb_run_scan.clicked.connect(self.run_scan)
 
+        self.pb_pause_scan = QPushButton('Pause')
+        self.pb_pause_scan.setFont(self.font1)
+        self.pb_pause_scan.setFixedHeight(40)
+        self.pb_pause_scan.setFixedWidth(80)
+        self.pb_pause_scan.setStyleSheet('color: rgb(200, 200, 200)')
+        self.pb_pause_scan.setEnabled(False)        
+        self.pb_pause_scan.clicked.connect(self.run_pause)
+
+        self.pb_resume_scan = QPushButton('Resume')
+        self.pb_resume_scan.setFont(self.font1)
+        self.pb_resume_scan.setFixedHeight(40)
+        self.pb_resume_scan.setFixedWidth(80)
+        self.pb_resume_scan.setStyleSheet('color: rgb(200, 200, 200);')
+        self.pb_resume_scan.setEnabled(False)
+        self.pb_resume_scan.clicked.connect(self.run_resume)
+
+        self.pb_stop_scan = QPushButton('Stop')
+        self.pb_stop_scan.setFont(self.font1)
+        self.pb_stop_scan.setFixedHeight(40)
+        self.pb_stop_scan.setFixedWidth(80)
+        self.pb_stop_scan.setStyleSheet('color: rgb(200, 200, 200);')
+        self.pb_stop_scan.setEnabled(False)
+        self.pb_stop_scan.clicked.connect(self.run_stop)
+
         self.pb_abort_scan = QPushButton('Abort')
         self.pb_abort_scan.setFont(self.font1)
-        self.pb_abort_scan.setFixedHeight(50)
-        self.pb_abort_scan.setFixedWidth(100)
-        #self.pb_run_scan.setDisabled(True)
-        self.pb_abort_scan.setStyleSheet('color: rgb(200, 50, 50);')
-        #self.pb_abort_scan.clicked.connect(self.run_scan)
+        self.pb_abort_scan.setFixedHeight(40)
+        self.pb_abort_scan.setFixedWidth(80)
+        self.pb_abort_scan.setStyleSheet('color: rgb(200, 200, 200);')
+        self.pb_abort_scan.setEnabled(False)
+        self.pb_abort_scan.clicked.connect(self.run_abort)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.pb_run_scan)
+        hbox.addWidget(self.pb_pause_scan)
+        hbox.addWidget(self.pb_resume_scan)
+        hbox.addWidget(self.pb_stop_scan)
+        hbox.addWidget(self.pb_abort_scan)
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+        hbox.addStretch()
+
+        return hbox
+
+    def hbox_scan_id(self):
+        lb_empty = QLabel()
 
         lb_sid = QLabel()
         lb_sid.setText('Latest scan ID:')
-        lb_sid.setAlignment(QtCore.Qt.AlignRight)
+        lb_sid.setAlignment(QtCore.Qt.AlignLeft)
+        lb_sid.setAlignment(QtCore.Qt.AlignVCenter)
         lb_sid.setFont(self.font1)
-        lb_sid.setFixedWidth(160)
+        lb_sid.setFixedWidth(120)
 
         self.lb_current_sid = QLabel()
         self.lb_current_sid.setText('')
         self.lb_current_sid.setFont(self.font1)
-        self.lb_current_sid.setFixedWidth(160)
+        self.lb_current_sid.setFixedWidth(80)
+        self.lb_current_sid.setAlignment(QtCore.Qt.AlignLeft)
+        self.lb_current_sid.setAlignment(QtCore.Qt.AlignVCenter)
         self.lb_current_sid.setStyleSheet('color: rgb(200, 50, 50);')
 
         self.tx_sid = QLineEdit()
@@ -1100,16 +1275,11 @@ class App(QWidget):
         hbox2.addWidget(self.tx_sid)
         hbox2.addStretch()
 
-        vbox = QVBoxLayout()
-        vbox.addLayout(hbox1)
-        vbox.addLayout(hbox2)
-        vbox.addStretch()
-
         hbox = QHBoxLayout()
-        hbox.addWidget(self.pb_run_scan)
-        hbox.addWidget(self.pb_abort_scan)
-        hbox.addLayout(vbox)
-        
+        hbox.addLayout(hbox1)
+        hbox.addLayout(hbox2)
+        hbox.addWidget(lb_empty)
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
         hbox.addStretch()
         return hbox
 
@@ -1117,32 +1287,53 @@ class App(QWidget):
         # lb_empty = QLabel()
         # lb_empty.setFixedWidth(40)
         lb_title = QLabel()
-        lb_title.setText('scan type')
+        lb_title.setText('Scan type')
         lb_title.setFont(self.font1)
 
-        n = len(scan_list)
+        #n = len(scan_list)
 
         self.lst_scan = QListWidget()
-        self.lst_scan.setFixedWidth(160)
+        self.lst_scan.setFixedWidth(200)
         self.lst_scan.setFixedHeight(160)
         self.lst_scan.setFont(self.font2)
         self.lst_scan.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.load_scan_type_list(1) # load commonly used scans
+        '''
         for k in scan_list.keys():
             name = ' '.join(t for t in k.split('_')[1:])
             self.lst_scan.addItem(name)
         '''
-        self.lst_scan.addItem('fly scan')
-        self.lst_scan.addItem('xanes scan')
-        self.lst_scan.addItem('xanes scan2')
-        self.lst_scan.addItem('delay scan')
-        self.lst_scan.addItem('delay count')
-        '''
         self.lst_scan.itemClicked.connect(self.show_scan_example)
         self.lst_scan.setSelectionMode(QAbstractItemView.SingleSelection)
 
+        self.pb_scan_list1 = QPushButton('Common scans')
+        self.pb_scan_list1.setFixedWidth(120)
+        self.pb_scan_list1.setFont(self.font2)
+        self.pb_scan_list1.clicked.connect(lambda: self.load_scan_type_list(1))
+
+        self.pb_scan_list2 = QPushButton('Other scans')
+        self.pb_scan_list2.setFixedWidth(120)
+        self.pb_scan_list2.setFont(self.font2)
+        self.pb_scan_list2.clicked.connect(lambda: self.load_scan_type_list(2))
+
+        self.pb_scan_list3 = QPushButton('User scans')
+        self.pb_scan_list3.setFixedWidth(120)
+        self.pb_scan_list3.setFont(self.font2)
+        self.pb_scan_list3.clicked.connect(lambda: self.load_scan_type_list(3))
+
+        vbox_load_scan = QVBoxLayout()
+        vbox_load_scan.addWidget(self.pb_scan_list1)
+        vbox_load_scan.addWidget(self.pb_scan_list2)
+        vbox_load_scan.setAlignment(QtCore.Qt.AlignTop)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.lst_scan)
+        hbox.addLayout(vbox_load_scan)
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+
         vbox = QVBoxLayout()
         vbox.addWidget(lb_title)
-        vbox.addWidget(self.lst_scan)
+        vbox.addLayout(hbox)       
         vbox.setAlignment(QtCore.Qt.AlignTop)
 
         return vbox
@@ -1154,7 +1345,7 @@ class App(QWidget):
         lb_title.setFont(self.font1)
 
         self.lst_eng_list = QListWidget()
-        self.lst_eng_list.setFixedWidth(120)
+        self.lst_eng_list.setFixedWidth(160)
         self.lst_eng_list.setFixedHeight(160)
         self.lst_eng_list.setFont(self.font2)
         self.lst_eng_list.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -1475,11 +1666,11 @@ class App(QWidget):
         self.pb_read_current_eng.setFixedWidth(120)
         self.pb_read_current_eng.setFont(self.font2)
 
-        for i in range(5):
+        for i in range(4):
             hbox[f'hbox_{i}'] = QHBoxLayout()
-            for j in range(4):
-                hbox[f'hbox_{i}'].addWidget(self.scan_lb[f'lb_{i * 4 + j}'])
-                hbox[f'hbox_{i}'].addWidget(self.scan_tx[f'tx_{i * 4 + j}'])
+            for j in range(5):
+                hbox[f'hbox_{i}'].addWidget(self.scan_lb[f'lb_{i * 5 + j}'])
+                hbox[f'hbox_{i}'].addWidget(self.scan_tx[f'tx_{i * 5 + j}'])
                 hbox[f'hbox_{i}'].setAlignment(QtCore.Qt.AlignLeft)
         hbox['note'] = QHBoxLayout()
         hbox['note'].addWidget(self.scan_lb['note'])
@@ -1543,7 +1734,7 @@ class App(QWidget):
         vbox.addLayout(hbox['note'])
         vbox.addLayout(hbox_pos)
         vbox.addWidget(lb_empty2)
-        for i in range(5):
+        for i in range(4):
             vbox.addLayout(hbox[f'hbox_{i}'])
         vbox.addWidget(lb_empty3)
         vbox.addLayout(hbox_scan)
@@ -1860,6 +2051,11 @@ class App(QWidget):
             except Exception as err:
                 print(err)
 
+    def open_shutter(self):
+        pass
+
+    def close_shutter(self):
+        pass
 
     def reset_r_speed(self):
         try:
@@ -2279,16 +2475,95 @@ class App(QWidget):
         eng = self.lb_motor_pos_e.text()
         self.scan_tx['XEng'].setText(eng)
 
+    def run_pause(self):
+        try:
+            msg = ''
+            self.pb_pause_scan.setStyleSheet('color: rgb(200, 200, 200);')
+            self.pb_resume_scan.setStyleSheet('color: rgb(200, 50, 50);')
+            self.pb_stop_scan.setStyleSheet('color: rgb(200, 50, 50);')
+            self.pb_abort_scan.setStyleSheet('color: rgb(200, 50, 50);')
+            self.pb_abort_scan.setEnabled(True)
+            self.pb_resume_scan.setEnabled(True)
+            self.pb_stop_scan.setEnabled(True)
+            self.pb_pause_scan.setEnabled(False)
+            QApplication.processEvents()   
+            RE.request_pause()         
+        except Exception as err:
+            msg += str(err) + '\n'
+            print(msg)
+            self.tx_scan_msg.setPlainText(msg)
+
+    def run_resume(self):
+        try:
+            msg = ''
+            self.pb_resume_scan.setStyleSheet('color: rgb(200, 200, 200);')
+            self.pb_pause_scan.setStyleSheet('color: rgb(200, 50, 50);')     
+            self.pb_stop_scan.setStyleSheet('color: rgb(200, 200, 200);')
+            self.pb_abort_scan.setStyleSheet('color: rgb(200, 200, 200);')
+            self.pb_resume_scan.setEnabled(False)
+            self.pb_pause_scan.setEnabled(True)
+            self.pb_stop_scan.setEnabled(False)
+            self.pb_abort_scan.setEnabled(False)
+            self.tx_scan_msg.setPlainText('Scan resumed ...')
+            QApplication.processEvents()             
+            RE.resume()            
+        except Exception as err:
+            msg = str(err) + '\n'
+            print(msg)
+            self.tx_scan_msg.setPlainText(msg)
+
+    def run_stop(self):
+        try:
+            msg = ''
+            self.pb_resume_scan.setStyleSheet('color: rgb(200, 200, 200);')
+            self.pb_pause_scan.setStyleSheet('color: rgb(200, 200, 200);')     
+            self.pb_stop_scan.setStyleSheet('color: rgb(200, 200, 200);')
+            self.pb_abort_scan.setStyleSheet('color: rgb(200, 200, 200);')
+            self.pb_resume_scan.setEnabled(False)
+            self.pb_pause_scan.setEnabled(False)
+            self.pb_stop_scan.setEnabled(False)
+            self.pb_abort_scan.setEnabled(False)
+            self.tx_scan_msg.setPlainText('Scan Stopped ...')
+            QApplication.processEvents()   
+            RE.stop()
+        except Exception as err:
+            msg += str(err) + '\n'
+            print(msg)
+            self.tx_scan_msg.setPlainText(msg)
+
+    def run_abort(self):
+        try:
+            msg = ''
+            self.pb_resume_scan.setStyleSheet('color: rgb(200, 200, 200);')
+            self.pb_pause_scan.setStyleSheet('color: rgb(200, 200, 200);')     
+            self.pb_stop_scan.setStyleSheet('color: rgb(200, 200, 200);')
+            self.pb_abort_scan.setStyleSheet('color: rgb(200, 200, 200);')
+            self.pb_resume_scan.setEnabled(False)
+            self.pb_pause_scan.setEnabled(False)
+            self.pb_stop_scan.setEnabled(False)
+            self.pb_abort_scan.setEnabled(False)
+            self.tx_scan_msg.setPlainText('Scan Aborted ...')
+            QApplication.processEvents()   
+            RE.abort()
+        except Exception as err:
+            msg += str(err) + '\n'
+            print(msg)
+            self.tx_scan_msg.setPlainText(msg)
+
     def run_scan(self):
         msg = ''
         cmd = self.tx_scan_msg.toPlainText()
         print(cmd)
         try:
             self.pb_run_scan.setStyleSheet('color: rgb(200, 200, 200);')
+            #self.pb_run_scan.setEnabled(False)
             self.pb_run_scan.setText('Running...\nDo not touch')
+            self.pb_pause_scan.setEnabled(True)
+            self.pb_pause_scan.setStyleSheet('color: rgb(200, 50, 50);')
             exec(cmd)
             if 'RE(' in cmd:
                 print('\n\nscan finished\n\n')
+                self.tx_scan_msg.setPlainText('\n\nscan finished\n\n')
         except Exception as err:
             msg += str(err) + '\n'
             print(msg)
@@ -2298,7 +2573,11 @@ class App(QWidget):
         finally:
             self.pb_run_scan.setStyleSheet('color: rgb(200, 50, 50);')
             self.pb_run_scan.setText('Run')
+            self.pb_run_scan.setEnabled(True)
+            self.pb_pause_scan.setEnabled(False)
             self.pos_sync()
+            print(msg)
+            self.tx_scan_msg.setPlainText(msg)
             try:
                 sid = db[-1].start['scan_id']
                 self.lb_current_sid.setText(str(sid))
@@ -2306,6 +2585,31 @@ class App(QWidget):
                 msg += str(err) + '\n'
                 print(msg)
                 self.tx_scan_msg.setPlainText(msg)
+
+    def load_scan_type_list(self, scan_type=1):
+        try:
+            if scan_type == 1: # commonly used scan
+                fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_comm.py'
+                msg = f'load common scan'
+            if scan_type == 2: # other scans, e.g., for beamline alignment
+                fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_other.py'
+                msg = f'load other scan'
+            if scan_type == 3: # customized scans, e.g., temporary created 
+                fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_custom.py'
+                msg = f'load custom scan'
+            get_ipython().run_line_magic("run", f"-i {fpath_scan_list}") # will generate variable "scan_list"
+            
+            self.lst_scan.clear()
+            QApplication.processEvents() 
+            for k in scan_list.keys():
+                name = ' '.join(t for t in k.split('_')[1:])
+                self.lst_scan.addItem(name)
+            QApplication.processEvents()  
+        except Exception as err:
+            msg = str(err) + '\n'
+        finally:
+            print(msg)
+            self.tx_scan_msg.setPlainText(msg)
 
     def record_scan(self):
         # need to 'check scan' first
