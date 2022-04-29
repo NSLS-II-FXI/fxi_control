@@ -22,9 +22,10 @@ import threading
 import bluesky.plan_stubs as bps
 
 
-get_ipython().run_line_magic("run", "-i /nsls2/data/fxi-new/shared/software/fxi_control/scan_list.py")
+#get_ipython().run_line_magic("run", "-i /nsls2/data/fxi-new/shared/software/fxi_control/scan_list.py")
 
-global txm, CALIBER
+global txm, CALIBER, scan_list
+scan_list = {}
 
 
 def motor_list(n=1):
@@ -200,8 +201,6 @@ class ConsoleWidget(RichIPythonWidget):
         Execute a command in the frame of the console widget
         """
         self._execute(command, False)
-
-
 
 
 class Xyze_motor(QObject):
@@ -1324,6 +1323,7 @@ class App(QWidget):
         vbox_load_scan = QVBoxLayout()
         vbox_load_scan.addWidget(self.pb_scan_list1)
         vbox_load_scan.addWidget(self.pb_scan_list2)
+        vbox_load_scan.addWidget(self.pb_scan_list3)
         vbox_load_scan.setAlignment(QtCore.Qt.AlignTop)
 
         hbox = QHBoxLayout()
@@ -2052,10 +2052,24 @@ class App(QWidget):
                 print(err)
 
     def open_shutter(self):
-        pass
+        try:
+            self.pb_open_shutter.setDisabled(True)
+            RE(_open_shutter())
+        except Exception as err:
+            print(err)
+        finally:
+            self.pb_open_shutter.setDisabled(False)
+        
 
     def close_shutter(self):
-        pass
+        try:
+            self.pb_close_shutter.setDisabled(True)
+            RE(_close_shutter())
+        except Exception as err:
+            print(err)
+        finally:
+            self.pb_close_shutter.setDisabled(False)
+        
 
     def reset_r_speed(self):
         try:
@@ -2587,21 +2601,32 @@ class App(QWidget):
                 self.tx_scan_msg.setPlainText(msg)
 
     def load_scan_type_list(self, scan_type=1):
+        global scan_list
         try:
             if scan_type == 1: # commonly used scan
                 fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_comm.py'
                 msg = f'load common scan'
+                get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
+                tmp_scan_list = fxi_load_scan_list_comm()
+                print(tmp_scan_list.keys())
+
             if scan_type == 2: # other scans, e.g., for beamline alignment
                 fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_other.py'
                 msg = f'load other scan'
+                get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
+                tmp_scan_list = fxi_load_scan_list_other()
+
             if scan_type == 3: # customized scans, e.g., temporary created 
                 fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_custom.py'
                 msg = f'load custom scan'
-            get_ipython().run_line_magic("run", f"-i {fpath_scan_list}") # will generate variable "scan_list"
+                get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
+                tmp_scan_list = fxi_load_scan_list_custom()
+                
+            scan_list = merge_dict(scan_list, tmp_scan_list)
             
             self.lst_scan.clear()
             QApplication.processEvents() 
-            for k in scan_list.keys():
+            for k in tmp_scan_list.keys():
                 name = ' '.join(t for t in k.split('_')[1:])
                 self.lst_scan.addItem(name)
             QApplication.processEvents()  
@@ -3335,6 +3360,9 @@ class App(QWidget):
             print(err)
 
 
+def merge_dict(dict1, dict2):
+    res = {**dict1, **dict2}
+    return res
 
 def run_main():
     app = QApplication(sys.argv)
