@@ -20,12 +20,21 @@ from qtconsole.manager import QtKernelManager
 #from scan_list import *
 import threading
 import bluesky.plan_stubs as bps
+import ast
+import numpy as np
+from inspect import getmembers, isfunction
 
+#from extract_scan_list import prepare_scan_list, convert_fun_dict
+from scan_list_common import fxi_load_scan_list_common
+from scan_list_other import fxi_load_scan_list_other
+from scan_list_user import fxi_load_scan_list_user
+from scan_list_pzt import fxi_load_scan_list_pzt
 
 #get_ipython().run_line_magic("run", "-i /nsls2/data/fxi-new/shared/software/fxi_control/scan_list.py")
 
 global txm, CALIBER, scan_list
 scan_list = {}
+
 
 
 def motor_list(n=1):
@@ -287,6 +296,7 @@ class App(QWidget):
         self.txm_scan = {}
         self.txm_record_scan = {}
         self.fn_calib_eng_file = "/nsls2/data/fxi-new/legacy/log/calib_new.csv"
+        self.fpath_bluesky_startup = '/nsls2/data/fxi-new/shared/config/bluesky/profile_collection/startup'
         self.timestamp_cache_for_calib_eng_file = os.stat(self.fn_calib_eng_file)
         grid = QGridLayout()
         # gpbox_prep = self.layout_GP_prepare()
@@ -315,8 +325,8 @@ class App(QWidget):
         lb_1 = QLabel()
         lb_1.setFont(self.font2)
         lb_1.setText('Type 1 (single scan): choose "scan type" -> '
-                     'input parameters (load and select "Energy list" if needed) -> '
-                     'add "sample/Bkg Pos." -> "check scan" -> "Run"')
+                     'input parameters (load and select "Energy list" if needed) ->' 
+                     '"check scan" -> "Run"')
         lb_2 = QLabel()
         lb_2.setFont(self.font2)
         lb_2.setText('Type 2 (multi scans): after "check scan" -> '
@@ -335,6 +345,8 @@ class App(QWidget):
         lb_empty.setFixedWidth(40)
         lb_empty1 = QLabel()
         lb_empty1.setFixedWidth(40)
+        lb_empty2 = QLabel()
+        lb_empty2.setFixedWidth(40)
         gpbox = QGroupBox('Sample position')
         gpbox.setFont(self.font1)
         #gpbox.setStyleSheet('color: rgb(0, 80, 255);')
@@ -344,6 +356,10 @@ class App(QWidget):
         #hbox_motor.addLayout(self.vbox_motor_step())
         hbox_motor.addLayout(self.vbox_pos_list())
         hbox_motor.addWidget(lb_empty)
+
+        hbox_motor.addLayout(self.vbox_pos_select_for_scan())
+        hbox_motor.addWidget(lb_empty2)
+
         hbox_motor.addLayout(self.vbox_beam_shutter())
         hbox_motor.setAlignment(QtCore.Qt.AlignLeft)
         hbox_motor.addStretch()
@@ -360,13 +376,13 @@ class App(QWidget):
         lb_title.setText('TXM motors')
         lb_title.setFont(self.font1)
 
-        self.pb_pos_sync = QPushButton('Sync. with CSS')
-        self.pb_pos_sync.setFixedWidth(200)
+        self.pb_pos_sync = QPushButton('Sync. CSS pos. / update energy calib.')
+        self.pb_pos_sync.setFixedWidth(350)
         self.pb_pos_sync.setFont(self.font2)
         self.pb_pos_sync.clicked.connect(self.pos_sync)
 
-        self.pb_reset_rot_speed = QPushButton('Reset rotation speed')
-        self.pb_reset_rot_speed.setFixedWidth(200)
+        self.pb_reset_rot_speed = QPushButton('Reset rotation speed to 30 deg/s')
+        self.pb_reset_rot_speed.setFixedWidth(350)
         self.pb_reset_rot_speed.setFont(self.font2)
         self.pb_reset_rot_speed.clicked.connect(self.reset_r_speed)
 
@@ -509,7 +525,7 @@ class App(QWidget):
         # lb_empty = QLabel()
         # lb_empty.setFixedWidth(10)
         lb_motor = QLabel()
-        lb_motor.setFixedWidth(80)
+        lb_motor.setFixedWidth(70)
         lb_motor.setText('piezo x:')
         lb_motor.setFont(self.font2)
 
@@ -535,10 +551,10 @@ class App(QWidget):
         lb_unit3 = QLabel()
         lb_unit3.setText('um')
         lb_unit3.setFont(self.font2)
-        lb_unit3.setFixedWidth(50)
+        lb_unit3.setFixedWidth(30)
 
         self.lb_motor_pos_x = QLabel()
-        self.lb_motor_pos_x.setFixedWidth(100)
+        self.lb_motor_pos_x.setFixedWidth(80)
         self.lb_motor_pos_x.setText('0')
         self.lb_motor_pos_x.setFont(self.font2)
         pb_motor_minus = QPushButton('-')
@@ -574,7 +590,7 @@ class App(QWidget):
         # lb_empty = QLabel()
         # lb_empty.setFixedWidth(10)
         lb_motor = QLabel()
-        lb_motor.setFixedWidth(80)
+        lb_motor.setFixedWidth(70)
         lb_motor.setText('piezo y:')
         lb_motor.setFont(self.font2)
 
@@ -600,10 +616,10 @@ class App(QWidget):
         lb_unit3 = QLabel()
         lb_unit3.setText('um')
         lb_unit3.setFont(self.font2)
-        lb_unit3.setFixedWidth(50)
+        lb_unit3.setFixedWidth(30)
 
         self.lb_motor_pos_y = QLabel()
-        self.lb_motor_pos_y.setFixedWidth(100)
+        self.lb_motor_pos_y.setFixedWidth(80)
         self.lb_motor_pos_y.setText('0')
         self.lb_motor_pos_y.setFont(self.font2)
         pb_motor_minus = QPushButton('-')
@@ -639,7 +655,7 @@ class App(QWidget):
         # lb_empty = QLabel()
         # lb_empty.setFixedWidth(10)
         lb_motor = QLabel()
-        lb_motor.setFixedWidth(80)
+        lb_motor.setFixedWidth(70)
         lb_motor.setText('piezo z:')
         lb_motor.setFont(self.font2)
 
@@ -665,10 +681,10 @@ class App(QWidget):
         lb_unit3 = QLabel()
         lb_unit3.setText('um')
         lb_unit3.setFont(self.font2)
-        lb_unit3.setFixedWidth(50)
+        lb_unit3.setFixedWidth(30)
 
         self.lb_motor_pos_z = QLabel()
-        self.lb_motor_pos_z.setFixedWidth(100)
+        self.lb_motor_pos_z.setFixedWidth(80)
         self.lb_motor_pos_z.setText('0')
         self.lb_motor_pos_z.setFont(self.font2)
         pb_motor_minus = QPushButton('-')
@@ -704,7 +720,7 @@ class App(QWidget):
         # lb_empty = QLabel()
         # lb_empty.setFixedWidth(10)
         lb_motor = QLabel()
-        lb_motor.setFixedWidth(80)
+        lb_motor.setFixedWidth(70)
         lb_motor.setText('rotary r:')
         lb_motor.setFont(self.font2)
 
@@ -732,10 +748,10 @@ class App(QWidget):
         lb_unit3 = QLabel()
         lb_unit3.setText('deg')
         lb_unit3.setFont(self.font2)
-        lb_unit3.setFixedWidth(50)
+        lb_unit3.setFixedWidth(30)
 
         self.lb_motor_pos_r = QLabel()
-        self.lb_motor_pos_r.setFixedWidth(100)
+        self.lb_motor_pos_r.setFixedWidth(80)
         self.lb_motor_pos_r.setText('0')
         self.lb_motor_pos_r.setFont(self.font2)
         pb_motor_minus = QPushButton('-')
@@ -771,7 +787,7 @@ class App(QWidget):
         # lb_empty = QLabel()
         # lb_empty.setFixedWidth(10)
         lb_motor = QLabel()
-        lb_motor.setFixedWidth(80)
+        lb_motor.setFixedWidth(70)
         lb_motor.setText('XEng:')
         lb_motor.setFont(self.font2)
 
@@ -791,13 +807,13 @@ class App(QWidget):
         lb_unit2.setFont(self.font2)
         lb_unit2.setFixedWidth(50)
 
-        lb_note = QLabel()
-        lb_note.setFixedWidth(120)
-        lb_note.setText('(calib. pos)')
-        lb_note.setFont(self.font2)
+        self.lb_note = QLabel()
+        self.lb_note.setFixedWidth(300)
+        self.lb_note.setText('(calib. pos)')
+        self.lb_note.setFont(self.font2)
 
         self.lb_motor_pos_e = QLabel()
-        self.lb_motor_pos_e.setFixedWidth(100)
+        self.lb_motor_pos_e.setFixedWidth(80)
         self.lb_motor_pos_e.setText('0')
         self.lb_motor_pos_e.setFont(self.font2)
         hbox = QHBoxLayout()
@@ -806,14 +822,70 @@ class App(QWidget):
         hbox.addWidget(lb_unit)
         hbox.addWidget(self.tx_setpos_e)
         hbox.addWidget(lb_unit2)
-        hbox.addWidget(lb_note)
+        hbox.addWidget(self.lb_note)
         hbox.setAlignment(QtCore.Qt.AlignLeft)
         return hbox
+
+    def vbox_pos_select_for_scan(self):
+        lb_pos = QLabel()
+        lb_pos.setFixedWidth(200)
+        lb_pos.setText('Position used in scan')
+        lb_pos.setFont(self.font1)
+        lb_pos.setStyleSheet('color: rgb(0, 80, 255)')
+
+        self.lst_scan_pos = QListWidget()
+        self.lst_scan_pos.setFixedWidth(100)
+        self.lst_scan_pos.setFixedHeight(120)
+        self.lst_scan_pos.setFont(self.font2)
+        #self.lst_scan_pos.itemClicked.connect(self.show_pos_clicked)
+        #self.lst_scan_pos.setSelectionMode(QAbstractItemView.SingleSelection)
+
+        self.pb_pos_rm_select = QPushButton('remove')
+        self.pb_pos_rm_select.setFixedWidth(100)
+        self.pb_pos_rm_select.setFont(self.font2)
+        self.pb_pos_rm_select.clicked.connect(self.pos_remove_select)
+
+        self.pb_pos_rm_all_select = QPushButton('remove all')
+        self.pb_pos_rm_all_select.setFixedWidth(100)
+        self.pb_pos_rm_all_select.setFont(self.font2)
+        self.pb_pos_rm_all_select.clicked.connect(self.pos_remove_all_select)
+
+        lb_note1 = QLabel()
+        lb_note1.setText('1. if empty, use current pos.')
+        lb_note1.setFont(self.font2)
+        lb_note1.setFixedWidth(210)
+        lb_note1.setFixedHeight(30)
+
+        lb_note2 = QLabel()
+        lb_note2.setText('2. Bkg. is automatically added')
+        lb_note2.setFont(self.font2)
+        lb_note1.setFixedWidth(210)
+
+        vbox_select = QVBoxLayout()
+        vbox_select.addWidget(self.pb_pos_rm_select)
+        vbox_select.addWidget(self.pb_pos_rm_all_select)
+        vbox_select.setAlignment(QtCore.Qt.AlignTop)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.lst_scan_pos)
+        hbox.addLayout(vbox_select)        
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+
+        vbox = QVBoxLayout()
+        vbox.addWidget(lb_pos)
+        vbox.addLayout(hbox)
+        vbox.addWidget(lb_note1)
+        vbox.addWidget(lb_note2)
+        vbox.addStretch()
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+
+        return vbox
+       
 
     def vbox_pos_list(self):
         lb_pos = QLabel()
         lb_pos.setFixedWidth(160)
-        lb_pos.setText('Position List')
+        lb_pos.setText('Position saved')
         lb_pos.setFont(self.font1)
 
         lb_pos_x = QLabel()
@@ -865,7 +937,7 @@ class App(QWidget):
 
         self.lst_pos = QListWidget()
         self.lst_pos.setFixedWidth(100)
-        self.lst_pos.setFixedHeight(150)
+        self.lst_pos.setFixedHeight(180)
         self.lst_pos.setFont(self.font2)
         self.lst_pos.itemClicked.connect(self.show_pos_clicked)
         self.lst_pos.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -900,6 +972,13 @@ class App(QWidget):
         self.pb_pos_go.setFont(self.font2)
         self.pb_pos_go.clicked.connect(self.pos_go_to)
 
+        self.pb_pos_select = QPushButton('select for scan --->')
+        self.pb_pos_select.setFixedWidth(205)
+        self.pb_pos_select.setFont(self.font2)
+        self.pb_pos_select.setStyleSheet('color: rgb(0, 80, 255)')
+        self.pb_pos_select.clicked.connect(self.pos_select_for_scan)
+
+
         hbox1 = QHBoxLayout()
         hbox1.addWidget(self.pb_pos_rec)
         hbox1.addWidget(self.pb_pos_out)
@@ -919,6 +998,7 @@ class App(QWidget):
         vbox_rec_go.addLayout(hbox1)
         vbox_rec_go.addLayout(hbox2)
         vbox_rec_go.addLayout(hbox3)
+        vbox_rec_go.addWidget(self.pb_pos_select)
         vbox_rec_go.addLayout(hbox_pos1)
         vbox_rec_go.addLayout(hbox_pos2)
         vbox_rec_go.setAlignment(QtCore.Qt.AlignTop)
@@ -981,15 +1061,15 @@ class App(QWidget):
         self.pb_close_shutter.setFixedWidth(120)
         self.pb_close_shutter.clicked.connect(self.close_shutter)
 
-        hbox_shutter_click = QHBoxLayout()
-        hbox_shutter_click.addWidget(self.pb_open_shutter)
-        hbox_shutter_click.addWidget(self.pb_close_shutter)
-        hbox_shutter_click.setAlignment(QtCore.Qt.AlignLeft)
+        vbox_shutter_click = QVBoxLayout()
+        vbox_shutter_click.addWidget(self.pb_open_shutter)
+        vbox_shutter_click.addWidget(self.pb_close_shutter)
+        vbox_shutter_click.setAlignment(QtCore.Qt.AlignLeft)
 
         vbox = QVBoxLayout()
         vbox.addLayout(hbox_beam)
         vbox.addLayout(hbox_shutter)
-        vbox.addLayout(hbox_shutter_click)
+        vbox.addLayout(vbox_shutter_click)
         vbox.setAlignment(QtCore.Qt.AlignTop)
         vbox.addStretch()
         return vbox
@@ -1053,6 +1133,7 @@ class App(QWidget):
         sep = QLabel()
         sep.setFixedWidth(10)
         sep.setFixedHeight(180)
+        #sep.setStyleSheet('background-color: rgb(0, 80, 255);')
         sep.setStyleSheet('background-color: rgb(0, 80, 255);')
 
         scan_cmd = self.vbox_scan_cmd()
@@ -1096,8 +1177,9 @@ class App(QWidget):
         self.lb_scan_msg = QLabel()
         self.lb_scan_msg.setFixedWidth(500)
         self.lb_scan_msg.setText("Scan command / Message:")
+        self.lb_scan_msg.setFixedHeight(28)
         self.tx_scan_msg = QPlainTextEdit()
-        self.tx_scan_msg.setFixedWidth(600)
+        self.tx_scan_msg.setFixedWidth(700)
         self.tx_scan_msg.setFixedHeight(240)
         self.tx_scan_msg.setFont(self.font2)
 
@@ -1139,7 +1221,7 @@ class App(QWidget):
     
         #self.ip_widget = ConsoleWidget()
         self.ip_widget = make_jupyter_widget_with_kernel()        
-        self.ip_widget.setFixedWidth(1000)
+        self.ip_widget.setFixedWidth(900)
         self.ip_widget.setFixedHeight(300)
         self.ip_widget.set_default_style('linux')
         self.ip_widget.font = QtGui.QFont(self.ip_widget.font.family(), 12);
@@ -1305,25 +1387,55 @@ class App(QWidget):
         self.lst_scan.itemClicked.connect(self.show_scan_example)
         self.lst_scan.setSelectionMode(QAbstractItemView.SingleSelection)
 
-        self.pb_scan_list1 = QPushButton('Common scans')
-        self.pb_scan_list1.setFixedWidth(120)
+        self.pb_scan_list1 = QPushButton('Common')
+        self.pb_scan_list1.setFixedWidth(100)
         self.pb_scan_list1.setFont(self.font2)
         self.pb_scan_list1.clicked.connect(lambda: self.load_scan_type_list(1))
 
-        self.pb_scan_list2 = QPushButton('Other scans')
-        self.pb_scan_list2.setFixedWidth(120)
+        self.pb_scan_list2 = QPushButton('Other scan')
+        self.pb_scan_list2.setFixedWidth(100)
         self.pb_scan_list2.setFont(self.font2)
         self.pb_scan_list2.clicked.connect(lambda: self.load_scan_type_list(2))
 
-        self.pb_scan_list3 = QPushButton('User scans')
-        self.pb_scan_list3.setFixedWidth(120)
+        self.pb_scan_list3 = QPushButton('User scan')
+        self.pb_scan_list3.setFixedWidth(100)
         self.pb_scan_list3.setFont(self.font2)
         self.pb_scan_list3.clicked.connect(lambda: self.load_scan_type_list(3))
 
+        self.pb_scan_list1_update = QPushButton('U')
+        self.pb_scan_list1_update.setFixedWidth(30)
+        self.pb_scan_list1_update.setFont(self.font2)
+        self.pb_scan_list1_update.clicked.connect(lambda: self.update_scan_type_list(1))
+
+        self.pb_scan_list2_update = QPushButton('U')
+        self.pb_scan_list2_update.setFixedWidth(30)
+        self.pb_scan_list2_update.setFont(self.font2)
+        self.pb_scan_list2_update.clicked.connect(lambda: self.update_scan_type_list(2))
+
+        self.pb_scan_list3_update = QPushButton('U')
+        self.pb_scan_list3_update.setFixedWidth(30)
+        self.pb_scan_list3_update.setFont(self.font2)
+        self.pb_scan_list3_update.clicked.connect(lambda: self.update_scan_type_list(3))
+
+        hbox_scan_list1 = QHBoxLayout()
+        hbox_scan_list1.addWidget(self.pb_scan_list1)
+        hbox_scan_list1.addWidget(self.pb_scan_list1_update)
+        hbox_scan_list1.setAlignment(QtCore.Qt.AlignLeft)
+
+        hbox_scan_list2 = QHBoxLayout()
+        hbox_scan_list2.addWidget(self.pb_scan_list2)
+        hbox_scan_list2.addWidget(self.pb_scan_list2_update)
+        hbox_scan_list2.setAlignment(QtCore.Qt.AlignLeft)
+
+        hbox_scan_list3 = QHBoxLayout()
+        hbox_scan_list3.addWidget(self.pb_scan_list3)
+        hbox_scan_list3.addWidget(self.pb_scan_list3_update)
+        hbox_scan_list3.setAlignment(QtCore.Qt.AlignLeft)
+
         vbox_load_scan = QVBoxLayout()
-        vbox_load_scan.addWidget(self.pb_scan_list1)
-        vbox_load_scan.addWidget(self.pb_scan_list2)
-        vbox_load_scan.addWidget(self.pb_scan_list3)
+        vbox_load_scan.addLayout(hbox_scan_list1)
+        vbox_load_scan.addLayout(hbox_scan_list2)
+        vbox_load_scan.addLayout(hbox_scan_list3)
         vbox_load_scan.setAlignment(QtCore.Qt.AlignTop)
 
         hbox = QHBoxLayout()
@@ -1732,7 +1844,7 @@ class App(QWidget):
         lb_empty3.setFixedHeight(10)
 
         vbox.addLayout(hbox['note'])
-        vbox.addLayout(hbox_pos)
+        #vbox.addLayout(hbox_pos)
         vbox.addWidget(lb_empty2)
         for i in range(4):
             vbox.addLayout(hbox[f'hbox_{i}'])
@@ -1965,8 +2077,8 @@ class App(QWidget):
         self.scan_tx['XEng'].setText(f'{val:2.5f}')
 
     def pos_sync(self):
-        msg = 'synchronizing motor position ...\n'
         try:
+            msg = ''
             sid = RE.md['scan_id']
             self.lb_current_sid.setText(str(sid))
             sid2 = db[-1].start['scan_id']
@@ -1979,9 +2091,12 @@ class App(QWidget):
                 self.tx_scan_msg.setPlainText(msg)
             else:
                 self.lb_current_sid.setText(str(sid2))
-                pass
+            
+            self.display_calib_eng_only()
+            msg += 'update energy calibration finished.\n'
         except:
             msg += 'fails to connect database to retrieve scan_ID\n'
+        finally:
             print(msg)
             self.tx_scan_msg.setPlainText(msg)
         try:
@@ -1997,12 +2112,14 @@ class App(QWidget):
             self.lb_motor_pos_e.setText(f'{eng:2.5f}')
         except:
             msg += 'fails to connect physical motor (zps.sx, zps.sy, spz.sz and zps.pi_r)\n'
+        finally:
             print(msg)
             self.tx_scan_msg.setPlainText(msg)
         try:
             self.display_calib_eng_only()
         except:
             msg += 'fails to read energy calibration file)\n'
+        finally:
             print(msg)
             self.tx_scan_msg.setPlainText(msg)
         # need to synchronize with CSS
@@ -2023,8 +2140,10 @@ class App(QWidget):
             self.lb_limit_r.setText(f'({int(lim_r[0])}, {int(lim_r[1])})')
         except:
             msg += 'fails to connect physical motor (zps.sx, zps.sy, spz.sz and zps.pi_r) to retieve motor limits\n'
+        finally:    
             print(msg)
-            self.tx_scan_msg.setPlainText(msg)
+        msg += 'motor synchronization finshed.'    
+        self.tx_scan_msg.setPlainText(msg)
 
     def repeat_pos_sync(self):
         while(True):
@@ -2134,9 +2253,19 @@ class App(QWidget):
         if len(item):
             self.show_pos_clicked()
 
+        # also remove item in list "Position selected for scan", if exist
+        i = 0
+        while i < min(self.lst_scan_pos.count(), 99):
+            rm_item = self.lst_scan_pos.item(i)
+            pos_exist = rm_item.text()
+            if pos == pos_exist:
+                self.lst_scan_pos.takeItem(self.lst_scan_pos.row(rm_item))
+            i = i + 1
+
     def pos_remove_all(self):
         self.pos = {}
         self.lst_pos.clear()
+        self.lst_scan_pos.clear()
 
     def pos_update(self):
         item = self.lst_pos.selectedItems()
@@ -2151,6 +2280,7 @@ class App(QWidget):
             self.pos[pos]['z'] = z
             self.pos[pos]['r'] = r
             self.show_pos_clicked()
+            self.add_bkg_pos()
 
     def pos_go_to(self):
         item = self.lst_pos.selectedItems()
@@ -2184,8 +2314,10 @@ class App(QWidget):
         item = self.lst_pos.findItems('Bkg', QtCore.Qt.MatchExactly)
         item[0].setSelected(True)
         self.show_pos_clicked()
+        self.add_bkg_pos()
 
     def show_scan_example_sub(self, txm_scan):
+        
         for i in range(20):
             self.scan_lb[f'lb_{i}'].setText(f'param {i}:')
             self.scan_lb[f'lb_{i}'].setVisible(False)
@@ -2213,6 +2345,12 @@ class App(QWidget):
             self.pb_select_eng_list.setDisabled(True)
         self.tx_pos.setText('')
         self.sample_pos = {}
+        scan_name = self.scan_name
+        try:
+            intro += eval(scan_name[4:]).__doc__
+        except:
+            print(f'function "{scan_name}" does not have description')
+        print(scan_name[4:])
         self.tx_scan_msg.setPlainText(intro)
 
     def show_scan_example(self):
@@ -2220,13 +2358,41 @@ class App(QWidget):
         self.scan_name = 'txm_' + item[0].text().replace(' ', '_')
         txm_scan = scan_list[self.scan_name]
         self.show_scan_example_sub(txm_scan)
+        self.add_bkg_pos()
+
+    def add_bkg_pos(self):
+        try:
+            i = 0
+            while i < min(self.lst_pos.count(), 99):
+                item = self.lst_pos.item(i)
+                pos = item.text()
+                #print(f'\nbkg_pos={pos}')
+                if 'Bkg' in pos:  # background /out position
+                    x = self.pos[pos]['x']
+                    y = self.pos[pos]['y']
+                    z = self.pos[pos]['z']
+                    r = self.pos[pos]['r']
+                    for i in range(20):
+                        txt = self.scan_lb[f'lb_{i}'].text()
+                        if 'out_x' in txt:
+                            self.scan_tx[f'tx_{i}'].setText(str(x))
+                        elif 'out_y' in txt:
+                            self.scan_tx[f'tx_{i}'].setText(str(y))
+                        elif 'out_z' in txt:
+                            self.scan_tx[f'tx_{i}'].setText(str(z))
+                        elif 'out_r' in txt:
+                            self.scan_tx[f'tx_{i}'].setText(str(r))
+                        elif 'relative_move' in txt:
+                            self.scan_tx[f'tx_{i}'].setText('False')
+                i = i + 1
+        except Exception as err:
+            print(err)
 
     def add_sample_pos(self):
         try:
             item = self.lst_pos.selectedItems()
             pos = item[0].text()  # 'e.g., pos_01'
-            if 'pos' in pos and (
-            not pos in self.tx_pos.text()):  # not background position, and selected position has not been added
+            if 'pos' in pos and (not pos in self.tx_pos.text()):  # not background position, and selected position has not been added
                 pos_tmp = {pos: self.pos[pos]}
                 # self.sample_pos.append(pos_tmp)
                 self.sample_pos[pos] = self.pos[pos]
@@ -2239,6 +2405,8 @@ class App(QWidget):
                 else:
                     pos_info = pos
                 self.tx_pos.setText(pos_info)
+            # Now backgound position is automatically added when created    
+            '''
             elif 'Bkg' in pos:  # background /out position
                 x = self.pos[pos]['x']
                 y = self.pos[pos]['y']
@@ -2256,6 +2424,7 @@ class App(QWidget):
                         self.scan_tx[f'tx_{i}'].setText(str(r))
                     elif 'relative_move' in txt:
                         self.scan_tx[f'tx_{i}'].setText('False')
+                '''
         except:
             self.sample_pos = {}
 
@@ -2263,9 +2432,45 @@ class App(QWidget):
         self.sample_pos = {}
         self.tx_pos.setText('')
 
+    def pos_select_for_scan(self):
+        item = self.lst_pos.selectedItems()
+        if len(item):
+            pos = item[0].text()
+            if not 'Bkg' in pos:  
+                i = 0
+                flag_exist = False
+                while i < min(self.lst_scan_pos.count(), 99):
+                    pos_exist = self.lst_scan_pos.item(i).text()
+                    if pos == pos_exist:
+                        flag_exist = True
+                        break
+                    i = i + 1
+                if not flag_exist:
+                    self.lst_scan_pos.addItem(pos)
+                else:
+                    print(f'{pos} has already been added to scan list')
+
+    def pos_remove_select(self):
+        item = self.lst_scan_pos.selectedItems()
+        if len(item):
+            pos = item[0].text()  # 'e.g., pos_1'
+            self.lst_scan_pos.takeItem(self.lst_scan_pos.row(item[0]))
+    
+    def pos_remove_all_select(self):
+        self.lst_scan_pos.clear()
+
+    def get_scan_pos_from_list(self):
+        self.sample_pos = {}
+        for i in range(self.lst_scan_pos.count()):
+            item = self.lst_scan_pos.item(i)
+            pos = item.text()
+            self.sample_pos[pos] = self.pos[pos]
+
+
     def check_scan(self):
         self.txm_scan = {}
         flag_multi_pos_scan = 0
+        self.get_scan_pos_from_list()
         num_pos = len(self.sample_pos)
         if num_pos == 0:
             flag_pos_selected = 0
@@ -2362,11 +2567,11 @@ class App(QWidget):
             eng = eval(self.scan_tx['XEng'].text())
 
 
-        cmd_check_sid = 'RE.md["scan_id"] = db[-1].start["scan_id"]'
+        cmd_check_sid = 'RE.md["scan_id"] = db[-1].start["scan_id"]\n'
         cmd_all += cmd_check_sid + '\n'
 
         self.txm_scan['XEng'] = eng
-        cmd_move_eng = f'RE(move_zp_ccd({eng}))'
+        cmd_move_eng = f'RE(move_zp_ccd({eng}))\n'
         cmd_all += cmd_move_eng + '\n'
 
         if len(cmd_eng_list):
@@ -2604,23 +2809,29 @@ class App(QWidget):
         global scan_list
         try:
             if scan_type == 1: # commonly used scan
-                fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_comm.py'
-                msg = f'load common scan'
-                get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
-                tmp_scan_list = fxi_load_scan_list_comm()
-                print(tmp_scan_list.keys())
-
+                fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_common.py'
+                msg = f'load common scan in: 41-scans.py'
+                print(msg)
+                #get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
+                tmp_scan_list = fxi_load_scan_list_common()
+                
             if scan_type == 2: # other scans, e.g., for beamline alignment
+                fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_pzt.py'
+                msg = f'load other scan in: 43-scans_pzt.py and 44-scans_other.py'
+                #msg = f'load other scan in: 44-scans_other.py'
+                get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
+                tmp_scan_list1 = fxi_load_scan_list_pzt()
+                
                 fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_other.py'
-                msg = f'load other scan'
                 get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
-                tmp_scan_list = fxi_load_scan_list_other()
-
+                tmp_scan_list2 = fxi_load_scan_list_other()
+                tmp_scan_list = merge_dict(tmp_scan_list1, tmp_scan_list2)
+                #tmp_scan_list = fxi_load_scan_list_other()
             if scan_type == 3: # customized scans, e.g., temporary created 
-                fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_custom.py'
-                msg = f'load custom scan'
-                get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
-                tmp_scan_list = fxi_load_scan_list_custom()
+                fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_user.py'
+                msg = f'load user scan in: 98-user_scan.py'
+                #get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
+                tmp_scan_list = fxi_load_scan_list_user()
                 
             scan_list = merge_dict(scan_list, tmp_scan_list)
             
@@ -2629,12 +2840,37 @@ class App(QWidget):
             for k in tmp_scan_list.keys():
                 name = ' '.join(t for t in k.split('_')[1:])
                 self.lst_scan.addItem(name)
+                print(name)
             QApplication.processEvents()  
         except Exception as err:
             msg = str(err) + '\n'
         finally:
             print(msg)
             self.tx_scan_msg.setPlainText(msg)
+
+    def update_scan_type_list(self, scan_type=1):
+        
+        if scan_type == 1: # update common scan
+            fname_read = self.fpath_bluesky_startup + '/41-scans.py'
+            fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_common.py'
+            prepare_scan_list(fname_read, fname_write)  
+            self.load_scan_type_list(1)
+        if scan_type == 2: # update other+pzt scan
+            #fname_read = self.fpath_bluesky_startup + '/43-scans_pzt.py'
+            #fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_pzt.py'
+            #prepare_scan_list(fname_read, fname_write)  
+
+            fname_read = self.fpath_bluesky_startup + '/44-scans_other.py'
+            fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_other.py'
+            prepare_scan_list(fname_read, fname_write)  
+            self.load_scan_type_list(2)
+        if scan_type == 3: # update user scan
+            fname_read = self.fpath_bluesky_startup + '/98-user_scan.py'
+            fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_user.py'
+            prepare_scan_list(fname_read, fname_write)  
+            self.load_scan_type_list(3)
+        
+        
 
     def record_scan(self):
         # need to 'check scan' first
@@ -3280,7 +3516,14 @@ class App(QWidget):
                 txt = f'pos{eng_id}_{calib_eng:2.4f} keV'
                 self.lst_eng_calib.addItem(txt)
         '''
+        # update label information
         self.lst_eng_calib.sortItems()
+        eng_list_sort = np.sort(calib_eng_list)
+        eng_lb = '(calib. at: '
+        for eng in eng_list_sort:
+            eng_lb += f'{eng:2.1f}, '
+        eng_lb += 'keV)'
+        self.lb_note.setText(eng_lb)
 
 
     def display_calib_eng_detail(self):
@@ -3363,6 +3606,97 @@ class App(QWidget):
 def merge_dict(dict1, dict2):
     res = {**dict1, **dict2}
     return res
+
+def prepare_scan_list(fname_read, fname_write='scan_list_test.py'):
+    #fname_read = '/nsls2/data/fxi-new/shared/config/bluesky/profile_collection/startup/41-scans.py'
+    source = open(fname_read).read()
+    fun = [f.name for f in ast.parse(source).body if isinstance(f, ast.FunctionDef)]
+    fun_scan = [f for f in np.sort(fun) if 'scan' in f or 'xanes' in f] # funciton name with "scan"
+    
+    space4 = ' ' * 4
+    file_lines = []
+    fname_write_short = fname_write.split('/')[-1]
+    file_lines.append(f'def fxi_load_{fname_write_short.split(".")[0]}():')
+    file_lines.append(space4 + 'scan_list = {}')
+    
+    for i in range(len(fun_scan)):
+        fun_name = fun_scan[i]
+        fun_lines = convert_fun_dict(fun_name)
+        for j in range(len(fun_lines)):
+            file_lines.append(fun_lines[j])
+        file_lines.append('\n')
+    
+    for i in range(len(fun_scan)):
+        fun_name = fun_scan[i]
+        file_lines.append(space4 + f'scan_list["txm_{fun_name}"] = txm_{fun_name}')
+
+    file_lines.append(space4 + 'return scan_list')
+    file_lines = convert_epics_to_string(file_lines)
+    file_lines = convert_fpath_to_string(file_lines)
+    with open(fname_write, 'w') as f:
+        f.write(f'\n'.join(file_lines))
+
+
+def convert_fun_dict(fun_name):
+    #single_fun = inspect.getfullargspec(eval(fun_name))
+    signature = inspect.signature(eval(fun_name))
+    '''
+    fun_arg = single_fun[0]
+    fun_arg_value = single_fun[3]
+    '''
+    lines = []
+    space4 = ' '*4
+    
+    lines.append(space4 + 'txm_' + fun_name + ' = {')
+
+    for k, v in signature.parameters.items():
+        if k == 'md' or k == 'note' or k == 'binning':
+            continue
+        if v.default is inspect.Parameter.empty:
+            if 'detectors' in k or 'eng_list' in k or 'filter' in k:
+                val = '[]'
+            else:
+                val = 'None'
+        else:
+            val = v.default
+        l = f"'{k}': {str(val)}, "
+        lines.append(space4 * 2 + l)     
+    lines.append(space4 * 2 + "'introduction': ''' Description:\n '''")
+    lines.append(space4 + '}')
+    return lines
+
+
+def convert_fpath_to_string(file_lines):
+    lines_copy = file_lines.copy()
+    idx = []
+    for i, l in enumerate(file_lines):
+        if '/' in l:
+            idx.append(i)
+    for i in idx:
+        l = file_lines[i]
+        arg_name = l.split(':')[0]
+        arg_val = l[len(arg_name)+1:].strip().replace(',', '')
+        lines_copy[i] = arg_name + ': ' + '"' + arg_val + '",'
+    return lines_copy
+
+
+def convert_epics_to_string(file_lines):
+    lines_copy = file_lines.copy()
+    idx = []
+    for i, l in enumerate(file_lines):
+        if 'Epics' in l:
+            idx.append(i)
+
+    for i in idx:
+        l = file_lines[i]
+        arg_name = l.split(':')[0]
+        lsplit = l.split(',')
+        for j, ll in enumerate(lsplit):
+            if 'name' in ll:
+                break
+        arg_val = ll.split('=')[-1]
+        lines_copy[i] = arg_name + ': ' + arg_val + ','  
+    return lines_copy
 
 def run_main():
     app = QApplication(sys.argv)
