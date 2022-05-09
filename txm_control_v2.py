@@ -5,7 +5,7 @@ import os
 import threading
 import time
 from PyQt5 import QtGui, QtCore
-from PyQt5.QtCore import QThread, QObject, pyqtSignal
+from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSignal, pyqtSlot, QProcess, QTextCodec
 from PyQt5.QtWidgets import (QMainWindow, QFileDialog, QRadioButton, QApplication, QWidget, QFrame,
                              QLineEdit, QPlainTextEdit, QWidget, QPushButton, QLabel, QCheckBox, QGroupBox,
                              QScrollBar, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget,
@@ -22,6 +22,7 @@ import threading
 import bluesky.plan_stubs as bps
 import ast
 import numpy as np
+from epics import caget, caput
 from inspect import getmembers, isfunction
 
 #from extract_scan_list import prepare_scan_list, convert_fun_dict
@@ -47,6 +48,7 @@ def motor_list(n=1):
     motor7 = {}
 
     try:
+        '''
         motor1['XEng'] = XEng
         motor1['beam_current'] = beam_current
         motor1['zps.sx'] = zps.sx
@@ -69,15 +71,18 @@ def motor_list(n=1):
         motor2['aper.x'] = aper.x
         motor2['aper.y'] = aper.y
         motor2['aper.z'] = aper.z
-
+        '''
         motor3['ssa.v_gap'] = ssa.v_gap
         motor3['ssa.v_ctr'] = ssa.v_ctr
         motor3['ssa.h_gap'] = ssa.h_gap
         motor3['ssa.h_ctr'] = ssa.h_ctr
-        motor3['filter1'] = filter1
-        motor3['filter2'] = filter2
-        motor3['filter3'] = filter3
-        motor3['filter4'] = filter4
+        #motor3['filter1'] = filter1
+        #motor3['filter2'] = filter2
+        #motor3['filter3'] = filter3
+        #motor3['filter4'] = filter4
+        #newly added:
+        motor3['ic3'] = ic3
+        motor3['ic4'] = ic4
 
         motor4['cm.x'] = cm.x
         motor4['cm.yaw'] = cm.yaw
@@ -94,19 +99,19 @@ def motor_list(n=1):
         motor5['pbsl.x_ctr'] = pbsl.x_ctr
         motor5['pbsl.y_gap'] = pbsl.y_gap
         motor5['pbsl.y_ctr'] = pbsl.y_ctr
-        motor5['dcm.eng'] = dcm.eng
+        #motor5['dcm.eng'] = dcm.eng
         motor5['dcm.th1'] = dcm.th1
-        motor5['dcm.th2'] = dcm.th2
+        #motor5['dcm.th2'] = dcm.th2
         motor5['dcm.dy2'] = dcm.dy2
-        motor5['dcm.chi2'] = dcm.chi2
+        #motor5['dcm.chi2'] = dcm.chi2
+        motor5['pzt_cm_loadcell'] = pzt_cm_loadcell
+        motor5['pzt_tm_loadcell'] = pzt_tm_loadcell
 
-        motor6['pzt_dcm_chi2.pos'] = pzt_dcm_chi2.pos
-        motor6['pzt_dcm_th2.pos'] = pzt_dcm_th2.pos
-        motor6['pzt_cm_loadcell'] = pzt_cm_loadcell
-        motor6['pzt_tm_loadcell'] = pzt_tm_loadcell
+        #motor6['pzt_dcm_chi2.pos'] = pzt_dcm_chi2.pos
+        #motor6['pzt_dcm_th2.pos'] = pzt_dcm_th2.pos       
 
-        motor7['ic3'] = ic3
-        motor7['ic4'] = ic4
+        #motor7['ic3'] = ic3
+        #motor7['ic4'] = ic4
     except Exception as err:
         print(err)
 
@@ -142,6 +147,15 @@ def make_jupyter_widget_with_kernel():
     jupyter_widget.kernel_client = kernel_client
     return jupyter_widget
 
+
+class Stream(QtCore.QObject):
+    newText = QtCore.pyqtSignal(str)
+    def write(self, text):
+        self.newText.emit(str(text))
+    '''
+    def flush(self):
+        sys.stdout.flush()
+    '''
 
 class ConsoleWidget(RichIPythonWidget):
     def __init__(self, namespace={}, customBanner=None, *args, **kwargs):
@@ -211,41 +225,725 @@ class ConsoleWidget(RichIPythonWidget):
         """
         self._execute(command, False)
 
-
-class Xyze_motor(QObject):
-    def __init__(self, obj):
+class Get_motor_reading(QThread):
+    current_position = pyqtSignal(float)
+    def __init__(self, motor):
         super().__init__()
-        self.obj = obj
+        self.motor = motor
     def run(self):
-        x = zps.sx.position
-        y = zps.sy.position
-        z = zps.sz.position
-        r = zps.pi_r.position
-        eng = XEng.position
-        self.obj.lb_motor_pos_x.setText(f'{x:5.4f}')
-        self.obj.lb_motor_pos_y.setText(f'{y:5.4f}')
-        self.obj.lb_motor_pos_z.setText(f'{z:5.4f}')
-        self.obj.lb_motor_pos_r.setText(f'{r:5.4f}')
-        self.obj.lb_motor_pos_e.setText(f'{eng:2.5f}')
-        time.sleep(0.2)
-
-
-class Beam_current_status(QObject):
+        i = 0
+        while True:
+            if 'shutter' in self.motor.motor_name:
+                status = self.motor.mot.status.value
+                if 'Not' in status:
+                    current_pos = 1 # shutter closed
+                else:
+                    current_pos = 0 # shutter open
+            else:
+                if hasattr(self.motor.mot, 'position'):
+                    current_pos = self.motor.mot.position
+                elif hasattr(self.motor.mot, 'pos.get'):
+                    current_pos = self.motor.mot.pos.get()
+                elif hasattr(self.motor.mot, 'value'):
+                    current_pos = self.motor.mot.pos.get()
+                elif hasattr(self.motor.mot, 'status.value'):
+                    current_pos = self.motor.mot.status_value
+                else:
+                    continue
+            self.current_position.emit(current_pos)
+            i += 1
+            time.sleep(0.2)
+            
+class Shutter():
     def __init__(self, obj):
-        super().__init__()
+        
         self.obj = obj
-    def run(self):
+        self.font1 = QtGui.QFont('Arial', 12, QtGui.QFont.Bold)
+        self.font2 = QtGui.QFont('Arial', 12, QtGui.QFont.Normal)
+        self.motor_name = 'shutter'
+        self.mot = eval(self.motor_name)
+        self.init_motor_component()
+        self.init_connect_function()
+
+    def init_motor_component(self):
+        self.button_pb_open_shutter = self.pb_open_shutter()
+        self.button_pb_close_shutter = self.pb_close_shutter()
+        self.label_lb_beam_current = self.lb_beam_current()
+        self.label_lb_shutter_status = self.lb_shutter_status()
+
+    def init_connect_function(self):
+        self.button_pb_open_shutter.clicked.connect(self.fun_open_shutter)
+        self.button_pb_close_shutter.clicked.connect(self.fun_close_shutter)
+
+
+    def pb_open_shutter(self):
+        self.obj.open_shutter = FixButton(self.font2, 'Open shutter', 120, 40)
+        return self.obj.open_shutter
+
+    def pb_close_shutter(self):
+        self.obj.close_shutter = FixButton(self.font2, 'Close shutter', 120, 40)
+        return self.obj.close_shutter
+
+    def lb_beam_current(self):
+        self.obj.lb_beam_current = FixLabel(self.font1, '', 120)
+        self.obj.lb_beam_current.setStyleSheet('color: rgb(200, 50, 50);')
+        return self.obj.lb_beam_current
+
+    def lb_shutter_status(self):
+        self.obj.lb_shutter_status = FixLabel(self.font1, '', 120)
+        self.obj.lb_shutter_status.setStyleSheet('color: rgb(200, 50, 50);')
+        return self.obj.lb_shutter_status
+
+    def layout(self):
+        lb_beam = FixLabel(self.font1, 'Beam current:', 120)
+        lb_shutter = FixLabel(self.font1, 'Shutter status:', 120)
+
+        hbox_beam = QHBoxLayout()
+        hbox_beam.addWidget(lb_beam)
+        hbox_beam.addWidget(self.label_lb_beam_current)
+        hbox_beam.setAlignment(QtCore.Qt.AlignLeft)
+
+        hbox_shutter = QHBoxLayout()
+        hbox_shutter.addWidget(lb_shutter)
+        hbox_shutter.addWidget(self.label_lb_shutter_status)
+        hbox_shutter.setAlignment(QtCore.Qt.AlignLeft)
+
+        vbox_shutter_click = QVBoxLayout()
+        vbox_shutter_click.addWidget(self.button_pb_open_shutter)
+        vbox_shutter_click.addWidget(self.button_pb_close_shutter)
+        vbox_shutter_click.setAlignment(QtCore.Qt.AlignLeft)
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(hbox_beam)
+        vbox.addLayout(hbox_shutter)
+        vbox.addLayout(vbox_shutter_click)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+        return vbox
+
+    def fun_open_shutter(self):
+        try:
+            self.button_pb_open_shutter.setDisabled(True)
+            RE(_open_shutter())
+        except Exception as err:
+            print(err)
+        finally:
+            self.button_pb_open_shutter.setDisabled(False)
+
+    def fun_close_shutter(self):
+        try:
+            self.pb_close_shutter.setDisabled(True)
+            RE(_close_shutter())
+        except Exception as err:
+            print(err)
+        finally:
+            self.pb_close_shutter.setDisabled(False)
+
+    def fun_update_beam_current(self):
         beam_value = beam_current.read()['beam_current']['value']
-        shutter_value = shutter_status.read()['shutter_status']['value']
+        self.label_lb_beam_current.setText(f'{beam_value:3.1f} mA')
+    
+    def fun_update_shutter_status(self, shutter_value):
+        #shutter_value = shutter_status.read()['shutter_status']['value']
         if shutter_value == 1:
             sh_status = 'Closed' 
             stylesheet = 'color: rgb(200, 50, 50)' # display red
         else:
             sh_status = 'Open' 
             stylesheet = 'color: rgb(50, 200, 50)' # display green
-        self.obj.lb_beam_current.setText(f'{beam_value:3.1f} mA')
-        self.obj.lb_shutter_status.setText(sh_status)
-        self.obj.lb_shutter_status.setStyleSheet(stylesheet)
+        self.label_lb_shutter_status.setText(sh_status)
+        self.label_lb_shutter_status.setStyleSheet(stylesheet)
+        
+    def fun_update_status(self, shutter_value):
+        self.fun_update_beam_current()
+        self.fun_update_shutter_status(shutter_value)
+
+class Motor_base():
+    def __init__(self, obj,  motor_name, motor_label='',unit='um'):
+        super().__init__()
+        self.obj = obj
+        self.font1 = QtGui.QFont('Arial', 12, QtGui.QFont.Bold)
+        self.font2 = QtGui.QFont('Arial', 12, QtGui.QFont.Normal)
+        self.motor_name = motor_name
+        self.motor_label = motor_label if len(motor_label) else motor_name
+        self.unit = unit
+        self.mot = eval(motor_name)
+        self.init_motor_component()
+        self.init_connect_function()        
+
+    def init_motor_component(self):
+        self.editor_setpos = self.tx_editor_setpos()        
+        self.label_motor_pos = self.lb_label_motor_pos()
+        self.button_step_plus = self.pb_button_step_plus()
+        self.button_step_minus = self.pb_button_step_minus()
+        self.editor_step_size = self.tx_editor_step_size()
+
+    def init_connect_function(self): 
+        self.editor_setpos.returnPressed.connect(self.fun_move_to_pos)
+        self.button_step_plus.clicked.connect(lambda: self.fun_move_plus_minus('plus'))
+        self.button_step_minus.clicked.connect(lambda: self.fun_move_plus_minus('minus'))   
+   
+    def tx_editor_setpos(self):
+        self.obj.tx_setpos = QLineEdit()
+        self.obj.tx_setpos.setFont(self.font2)
+        self.obj.tx_setpos.setText('0')
+        self.obj.tx_setpos.setFixedWidth(80)
+        self.obj.tx_setpos.setValidator(QDoubleValidator())
+        return self.obj.tx_setpos
+    
+    def lb_label_motor_pos(self):
+        self.obj.lb_motor_pos = QLabel()
+        self.obj.lb_motor_pos.setFixedWidth(80)
+        self.obj.lb_motor_pos.setFont(self.font2)
+        #self.obj.lb_motor_pos.setAlignment(QtCore.Qt.AlignVCenter)
+        return self.obj.lb_motor_pos
+
+    def pb_button_step_plus(self):
+        self.obj.pb_motor_plus = QPushButton('+')
+        self.obj.pb_motor_plus.setFixedWidth(40)
+        self.obj.pb_motor_plus.setFont(self.font2)
+        return self.obj.pb_motor_plus
+    
+    def pb_button_step_minus(self):
+        self.obj.pb_motor_minus = QPushButton('-')
+        self.obj.pb_motor_minus.setFixedWidth(40)
+        self.obj.pb_motor_minus.setFont(self.font2)
+        return self.obj.pb_motor_minus
+        
+    def tx_editor_step_size(self):
+        self.obj.tx_step = QLineEdit()
+        self.obj.tx_step.setFont(self.font2)
+        self.obj.tx_step.setFixedWidth(60)
+        self.obj.tx_step.setValidator(QDoubleValidator(decimals=3))  
+        return self.obj.tx_step
+
+    def lb_unit(self):
+        lb_unit1 = QLabel()
+        lb_unit1.setText(self.unit)
+        lb_unit1.setFont(self.font2)
+        lb_unit1.setFixedWidth(50)
+        lb_unit2 = QLabel()
+        lb_unit2.setText(self.unit)
+        lb_unit2.setFont(self.font2)
+        lb_unit2.setFixedWidth(50)
+        lb_unit3 = QLabel()
+        lb_unit3.setText(self.unit)
+        lb_unit3.setFont(self.font2)
+        lb_unit3.setFixedWidth(30)
+        lb_unit4 = QLabel()
+        lb_unit4.setText(self.unit)
+        lb_unit4.setFont(self.font2)
+        lb_unit4.setFixedWidth(30)
+        return [lb_unit1, lb_unit2, lb_unit3, lb_unit4]
+
+    def fun_check_pos_limit(self):
+        try:
+            limit = self.mot.limits
+            l_l = float(limit[0])
+            l_h = float(limit[1])
+            flag = 0
+            try:
+                val = np.float(self.editor_setpos.text())
+            except:
+                val = np.float(self.label_motor_pos.text())
+            if abs(l_l - l_h) < 0.01: # l_l == l_h means not limit:
+                flag = 1
+            else: 
+                if val >= l_l and val <= l_h:
+                    flag = 1
+                else:
+                    flag = 0
+        except: # limit is not found for the motor
+            try:
+                val = np.float(self.editor_setpos.text())
+            except:
+                val = np.float(self.label_motor_pos.text())
+            flag = 1
+        return flag, val
+
+    def fun_move_to_pos(self):
+        flag, val = self.fun_check_pos_limit()
+        if flag:
+            try:
+                self.editor_setpos.setDisabled(True)
+                #RE(mv(self.mot, val))
+                caput(self.mot.prefix, val)                
+            except:
+                msg = f'fails to move {self.motor_name}'
+                print(msg)
+                self.obj.tx_scan_msg.setPlainText(msg)
+            finally:
+                self.editor_setpos.setEnabled(True)
+                try:
+                    val_rb = self.mot.position
+                except:
+                    val_rb = self.mot.pos.get() # for pzt_dcm_th2, pzt_dcm_chi2
+                self.label_motor_pos.setText(f'{val_rb:4.4f}')
+
+    def fun_move_plus_minus(self, direction='plus'):
+        try:
+            ss = float(self.editor_step_size.text())
+        except:
+            ss = 0
+            self.editor_step_size.setText('0')
+        try:
+            current_pos = float(self.editor_setpos.text())
+        except:
+            current_pos = self.mot.position
+        if direction == 'plus':
+            self.editor_setpos.setText(f'{(current_pos + ss):4.3f}')
+        elif direction == 'minus':
+            self.editor_setpos.setText(f'{(current_pos - ss):4.3f}')
+        else:
+            self.editor_setpos.setText(f'{(current_pos):4.3f}')
+        
+        self.fun_move_to_pos()    
+    
+    def fun_update_status(self, current_pos):
+        self.label_motor_pos.setText(f'{current_pos:4.4f}')
+    
+class Motor_layout(Motor_base):
+    def __init__(self, obj, motor_name, motor_label='', unit='um'):
+        super().__init__(obj, motor_name, motor_label, unit)   
+        self.button_reset_reading = self.pb_button_reset_reading()
+        self.editor_reset_reading = self.tx_editor_reset_reading()
+        self.init_motor_component_motor()
+        self.init_connect_function_motor()
+        self.init_pos_display_motor()
+ 
+    def init_motor_component_motor(self):
+        self.button_reset_reading = self.pb_button_reset_reading()
+        self.editor_reset_reading = self.tx_editor_reset_reading()
+
+    def init_connect_function_motor(self): 
+        self.button_reset_reading.clicked.connect(self.fun_reset_reading)
+        #if self.with_feedback:
+        
+        #    self.button_feedback.clicked.connect(self.fun_enable_feedback)
+     
+    def init_pos_display_motor(self):
+        current_pos = self.mot.position
+        step_size = self.mot.step_size.get()
+        self.label_motor_pos.setText(f'{current_pos:4.4f}')
+        self.editor_setpos.setText(f'{current_pos:4.4f}')
+        self.editor_reset_reading.setText((f'{current_pos:4.4f}'))
+        self.editor_step_size.setText('0')
+
+    def pb_button_reset_reading(self):
+        self.obj.pb_set_read = QPushButton('Reset to:')
+        self.obj.pb_set_read.setFixedWidth(110)
+        self.obj.pb_set_read.setFont(self.font2)
+        return self.obj.pb_set_read
+
+    def tx_editor_reset_reading(self):
+        self.obj.tx_set_read = QLineEdit()
+        self.obj.tx_set_read.setFixedWidth(75)
+        self.obj.tx_set_read.setFont(self.font2)
+        self.obj.tx_set_read.setValidator(QDoubleValidator()) 
+        return self.obj.tx_set_read
+
+    def fun_reset_reading(self):
+        mot = eval(self.motor_name)
+        try:
+            val = float(self.editor_reset_reading.text())
+        except:
+            val = mot.position
+        self.label_motor_pos.setText(f'{val:4.4f}')
+
+    def layout(self):
+        lb_empty = QLabel()
+        lb_empty.setFixedWidth(10)
+        lb_motor = QLabel()
+        lb_motor.setFixedWidth(75)
+        lb_motor.setText(self.motor_label + ':')
+        lb_motor.setFont(self.font1)
+        lb_motor.setAlignment(QtCore.Qt.AlignVCenter)
+        lb_unit = self.lb_unit()
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(lb_motor)
+        hbox.addWidget(self.label_motor_pos)
+        hbox.addWidget(lb_unit[0])
+        hbox.addWidget(self.editor_setpos)
+        hbox.addWidget(lb_unit[1])
+
+        hbox.addWidget(self.button_step_minus)
+        hbox.addWidget(self.editor_step_size)
+        hbox.addWidget(lb_unit[2])
+        hbox.addWidget(self.button_step_plus)
+        hbox.addWidget(lb_empty)
+
+        hbox.addWidget(self.button_reset_reading)
+        hbox.addWidget(self.editor_reset_reading)
+        #hbox.addWidget(lb_unit[3])
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+        return hbox
+
+class PZT_th2_chi2(Motor_layout):
+    def __init__(self, obj, motor_name, motor_label, unit='um'):
+        super().__init__(obj, motor_name, motor_label, unit)
+        #self.init_connect_function_pzt()
+        self.init_pos_display_motor()
+    '''
+    def init_connect_function(self): 
+        self.editor_setpos.returnPressed.connect(self.fun_move_to_pos)
+        self.button_step_plus.clicked.connect(lambda: self.fun_move_plus_minus('plus'))
+        self.button_step_minus.clicked.connect(lambda: self.fun_move_plus_minus('minus'))   
+    '''
+
+    def init_pos_display_motor(self): # overload function in super()
+        current_pos = self.mot.pos.get()
+        step_size = self.mot.step_size.get()
+        self.label_motor_pos.setText(f'{current_pos:4.4f}')
+        self.editor_setpos.setText(f'{current_pos:4.4f}')
+        self.editor_step_size.setText(f'{step_size:4.4f}')
+
+    def fun_move_to_pos(self):
+        try:
+            val = np.float(self.editor_setpos.text())
+        except:
+            val = np.float(self.label_motor_pos.text())
+        pv = self.mot.prefix + 'SET_POSITION.A'
+        caput(pv, val)
+
+    def layout(self):
+        lb_empty = QLabel()
+        lb_empty.setFixedWidth(10)
+        lb_motor = QLabel()
+        lb_motor.setFixedWidth(75)
+        lb_motor.setText(self.motor_label + ':')
+        lb_motor.setFont(self.font1)
+        lb_motor.setAlignment(QtCore.Qt.AlignVCenter)
+        lb_unit = self.lb_unit()
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(lb_motor)
+        hbox.addWidget(self.label_motor_pos)
+        hbox.addWidget(lb_unit[0])
+        hbox.addWidget(self.editor_setpos)
+        hbox.addWidget(lb_unit[1])
+
+        hbox.addWidget(self.button_step_minus)
+        hbox.addWidget(self.editor_step_size)
+        hbox.addWidget(lb_unit[2])
+        hbox.addWidget(self.button_step_plus)
+        hbox.addWidget(lb_empty)
+
+        #hbox.addWidget(lb_unit[3])
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+        return hbox
+
+class DCM_th2_chi2(Motor_layout):
+    def __init__(self, obj, motor_name, motor_label, unit='deg'):
+        super().__init__(obj, motor_name, motor_label, unit)
+        # motor_name = dcm_th2 / dcm_chi2
+        self.init_motor_component_dcm()
+        self.init_connect_function_dcm()
+        self.init_pos_display_motor_dcm()
+        
+    def init_motor_component_dcm(self):
+        self.button_feedback_enable = self.pb_button_feedback_enable()
+        self.editor_feedback_val = self.tx_editor_feedback_val()
+
+    def init_connect_function_dcm(self):
+        self.button_feedback_enable.clicked.connect(self.fun_enable_feedback)
+        self.editor_feedback_val.returnPressed.connect(self.fun_change_feedback_val)
+
+
+    def init_pos_display_motor_dcm(self):
+        feedback_val = self.mot.feedback.get()
+        feedback_status = self.mot.feedback_enable.get()
+        self.editor_feedback_val.setText(f'{feedback_val:2.4f}')
+        if feedback_status == 1:
+            self.button_feedback_enable.setText('Feedback On')
+            self.button_feedback_enable.setStyleSheet('color: rgb(200, 50, 50);')
+        else:
+            self.button_feedback_enable.setText('Feedback Off')
+            self.button_feedback_enable.setStyleSheet('color: rgb(50, 50, 50);')
+        
+    def fun_enable_feedback(self): 
+        # check feedback on motor: dcm_th2_/ dcm_chi2
+        current_feedback_val = self.mot.feedback.get()
+        current_feedback_status = self.mot.feedback_enable.get() # 1:on  0:off
+        try:
+            set_feedback_val = float(self.editor_feedback_val.text())
+        except:
+            set_feedback_val = current_feedback_val
+        set_feedback_status = 1 - current_feedback_status
+        RE(mv(self.mot.feedback, set_feedback_val))
+        RE(mv(self.mot.feedback_enable, set_feedback_status))
+        new_feedback_status = self.mot.feedback_enable.get()
+        self.fun_update_feedback_status(new_feedback_status)
+    
+    def fun_update_feedback_status(self, new_feedback_status):
+        #new_feedback_status = self.mot.feedback_enable.get()
+        if new_feedback_status == 1:
+            self.button_feedback_enable.setText('Feedback On')
+            self.button_feedback_enable.setStyleSheet('color: rgb(200, 50, 50)')
+        else:
+            self.button_feedback_enable.setText('Feedback Off')
+            self.button_feedback_enable.setStyleSheet('color: rgb(50, 50, 50)')
+
+    def fun_update_status(self, current_pos):
+        self.label_motor_pos.setText(f'{current_pos:4.4f}')
+        new_feedback_status = self.mot.feedback_enable.get()
+        self.fun_update_feedback_status(new_feedback_status)
+ 
+
+    def fun_change_feedback_val(self):
+        current_feedback_val = self.mot.feedback.get()
+        current_feedback_status = self.mot.feedback_enable.get() # 1:on  0:off
+        if current_feedback_status == 1: # feedback is on
+            RE(mv(self.mot.feedback, set_feedback_val))
+
+    def pb_button_feedback_enable(self):
+        self.obj.pb_button_feedback_enable = QPushButton('Feedback On')
+        self.obj.pb_button_feedback_enable.setFixedWidth(110)
+        self.obj.pb_button_feedback_enable.setFont(self.font2)
+        return self.obj.pb_button_feedback_enable
+
+    def tx_editor_feedback_val(self):
+        self.obj.tx_feedback_val = QLineEdit()
+        self.obj.tx_feedback_val.setFixedWidth(75)
+        self.obj.tx_feedback_val.setFont(self.font2)
+        self.obj.tx_feedback_val.setValidator(QDoubleValidator()) 
+        return self.obj.tx_feedback_val
+
+    def layout(self):
+        lb_empty = QLabel()
+        lb_empty.setFixedWidth(10)
+        lb_motor = QLabel()
+        lb_motor.setFixedWidth(75)
+        lb_motor.setText(self.motor_label + ':')
+        lb_motor.setFont(self.font1)
+        lb_motor.setAlignment(QtCore.Qt.AlignVCenter)
+        lb_unit = self.lb_unit()
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(lb_motor)
+        hbox.addWidget(self.label_motor_pos)
+        hbox.addWidget(lb_unit[0])
+        hbox.addWidget(self.editor_setpos)
+        hbox.addWidget(lb_unit[1])
+
+        hbox.addWidget(self.button_step_minus)
+        hbox.addWidget(self.editor_step_size)
+        hbox.addWidget(lb_unit[2])
+        hbox.addWidget(self.button_step_plus)
+        hbox.addWidget(lb_empty)
+
+        hbox.addWidget(self.button_feedback_enable)
+        hbox.addWidget(self.editor_feedback_val)
+        #hbox.addWidget(lb_unit[3])
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+        return hbox
+
+class Sample_motor_layout(Motor_layout):
+    def __init__(self, obj, motor_name, motor_label='', unit='um'):
+        super().__init__(obj, motor_name, motor_label, unit) 
+        self.init_motor_component_sample()
+        self.init_pos_display_sample()
+
+    def init_motor_component_sample(self):
+        self.label_lb_pos_limit = self.lb_pos_limit()
+
+    def init_pos_display_sample(self):
+        try:
+            low_limit = self.mot.low_limit.get()
+            high_limit = self.mot.high_limit.get()
+            self.label_lb_pos_limit.setText(f'({low_limit:4.0f}, {high_limit:4.0f})')
+        except:
+            pass  
+    
+    def lb_pos_limit(self):
+        self.obj.lb_limit = QLabel()
+        self.obj.lb_limit.setFixedWidth(140)
+        self.obj.lb_limit.setText('(-4000, 4000)')
+        self.obj.lb_limit.setFont(self.font2)
+        return self.obj.lb_limit 
+
+    def layout(self):
+        lb_empty = QLabel()
+        lb_empty.setFixedWidth(10)
+        lb_motor = QLabel()
+        lb_motor.setFixedWidth(75)
+        lb_motor.setText(self.motor_label + ':')
+        lb_motor.setFont(self.font1)
+        lb_unit = self.lb_unit()
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(lb_motor)
+        hbox.addWidget(self.label_motor_pos)
+        hbox.addWidget(lb_unit[0])
+        hbox.addWidget(self.editor_setpos)
+        hbox.addWidget(lb_unit[1])
+
+        hbox.addWidget(self.label_lb_pos_limit)
+
+        hbox.addWidget(self.button_step_minus)
+        hbox.addWidget(self.editor_step_size)
+        hbox.addWidget(lb_unit[2])
+        hbox.addWidget(self.button_step_plus)
+        hbox.addWidget(lb_empty)
+
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+        return hbox
+
+class XEng_motor_layout(Motor_layout):
+    def __init__(self, obj, motor_name, motor_label='', unit='um'):
+        super().__init__(obj, motor_name, motor_label, unit)   
+        self.label_eng_calib = self.lb_eng_calib()
+
+    def lb_eng_calib(self):
+        self.obj.lb_eng_calib = QLabel()
+        self.obj.lb_eng_calib.setFixedWidth(300)
+        self.obj.lb_eng_calib.setText('(calib. energy)')
+        self.obj.lb_eng_calib.setFont(self.font2)
+        return self.obj.lb_eng_calib
+
+    def layout(self):
+        lb_empty = QLabel()
+        lb_empty.setFixedWidth(10)
+        lb_motor = QLabel()
+        lb_motor.setFixedWidth(75)
+        lb_motor.setText(self.motor_label + ':')
+        lb_motor.setFont(self.font1)
+        lb_unit = self.lb_unit()
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(lb_motor)
+        hbox.addWidget(self.label_motor_pos)
+        hbox.addWidget(lb_unit[0])
+        hbox.addWidget(self.editor_setpos)
+        hbox.addWidget(lb_unit[1])
+
+        hbox.addWidget(self.label_eng_calib)
+        hbox.addWidget(lb_empty)
+
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+        return hbox
+
+class Filter_layout():
+    def __init__(self, obj, filter_name, filter_label):
+        # filter_name = 'filter1, 2, 3, 4'
+        self.obj = obj
+        self.motor_name = filter_name
+        self.motor_label = filter_label
+        self.font1 = QtGui.QFont('Arial', 12, QtGui.QFont.Bold)
+        self.font2 = QtGui.QFont('Arial', 12, QtGui.QFont.Normal)
+        self.mot = eval(self.motor_name)
+        self.init_component()
+        self.init_connect_function()
+        #self.fun_update_status()
+
+    def init_component(self):
+        self.button_filter_in = self.pb_button_filter_in()
+        self.button_filter_out = self.pb_button_filter_out()
+        self.label_filter = self.lb_label_filter()
+        
+    def init_connect_function(self):
+        self.obj.pb_filter_in.clicked.connect(lambda: self.fun_click_filter('In'))
+         
+    def lb_label_filter(self):
+        self.obj.lb_filter = QLabel()
+        self.obj.lb_filter.setText(self.motor_label)
+        self.obj.lb_filter.setFont(self.font2)
+        self.obj.lb_filter.setFixedHeight(40)
+        self.obj.lb_filter.setFixedWidth(120)
+        return self.obj.lb_filter
+
+    def pb_button_filter_in(self):
+        self.obj.pb_filter_in = QPushButton('In')
+        self.obj.pb_filter_in.setFixedHeight(40)
+        self.obj.pb_filter_in.setFixedWidth(40)
+        self.obj.pb_filter_in.setFont(self.font2)
+        return self.obj.pb_filter_in
+
+    def pb_button_filter_out(self):
+        self.obj.pb_filter_out = QPushButton('Out')
+        self.obj.pb_filter_out.setFixedHeight(40)
+        self.obj.pb_filter_out.setFixedWidth(40)
+        self.obj.pb_filter_out.setFont(self.font2)
+        self.obj.pb_filter_out.clicked.connect(lambda: self.fun_click_filter('Out'))
+        return self.obj.pb_filter_out
+
+    def fun_click_filter(self, op):
+        pv = self.mot.describe()[self.motor_name]['source'][3:]
+        if op == 'In': # inserted
+            caput(pv, 1)
+            #RE(mv(self.mot, 1))
+        else:
+            caput(pv, 0)
+            #RE(mv(self.mot, 0))
+        current_status = self.mot.value
+        self.fun_update_status(current_status) # excluded from global sync 
+
+    def fun_update_status(self, current_status):
+        #current_status = self.mot.value
+        if current_status == 1: # inserted
+            self.button_filter_in.setStyleSheet('color: rgb(200, 50, 50);')
+            self.button_filter_out.setStyleSheet('color: rgb(50, 50, 50);')
+        else:
+            self.button_filter_in.setStyleSheet('color: rgb(50, 50, 50);')
+            self.button_filter_out.setStyleSheet('color: rgb(200, 50, 50);')
+        
+    def layout(self):
+        lb_empty = QLabel()
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.label_filter)
+        hbox.addWidget(self.button_filter_in)
+        hbox.addWidget(self.button_filter_out)
+        hbox.addWidget(lb_empty)
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+        hbox.addStretch()
+        return hbox
+        
+class FixLabel(QLabel):
+    def __init__(self, font=None, name='', width=0, height=0):
+        super().__init__()
+        self.w = width
+        self.h = height
+        self.font = font
+        self.name = name
+        #self.Label = QLabel()
+        if self.w > 0:
+            self.setFixedWidth(self.w)
+        if self.h > 0:
+            self.setFixedHeight(self.h)
+        if not (self.font is None):
+            self.setFont(self.font)
+            self.setText(name)
+        self.setText(self.name)
+
+class FixEditor(QLineEdit):
+    def __init__(self, font=None, name='', width=0, height=0):
+        super().__init__()
+        self.w = width
+        self.h = height
+        self.font = font
+        self.name = name        
+        if self.w > 0:
+            self.setFixedWidth(self.w)
+        if self.h > 0:
+            self.setFixedHeight(self.h)
+        if not (self.font is None):
+             self.setFont(self.font)
+        self.setText(self.name)
+
+class FixButton(QPushButton):
+    def __init__(self, font=None, name='', width=0, height=0):
+        super().__init__()
+        self.w = width
+        self.h = height
+        self.font = font
+        self.name = name        
+        if self.w > 0:
+            self.setFixedWidth(self.w)
+        if self.h > 0:
+            self.setFixedHeight(self.h)
+        if not (self.font is None):
+             self.setFont(self.font)
+        self.setText(self.name)
 
 class App(QWidget):
     def __init__(self):
@@ -259,29 +957,18 @@ class App(QWidget):
         self.top = (height - self.height) // 2
         self.initUI()
         self.global_sync()
-        self.beam_shutter_sync()
+        #self.beam_shutter_sync()
         self.display_calib_eng_only()
+        self.enable_reset_reading()
 
-    '''
     def global_sync(self):
-        thread = threading.Thread(target=self.repeat_pos_sync, args=())
-        thread.daemon = True
-        thread.start()
-    '''
-    def global_sync(self):
-        self.thread_pos = QThread()
-        self.xyze_motor = Xyze_motor(obj=self)
-        self.xyze_motor.moveToThread(self.thread_pos)        
-        self.thread_pos.started.connect(self.xyze_motor.run)
-        self.thread_pos.start()
-
-    def beam_shutter_sync(self):
-        self.thread_beam_shutter = QThread()
-        self.beam_current_status = Beam_current_status(obj=self)
-        self.beam_current_status.moveToThread(self.thread_beam_shutter)        
-        self.thread_beam_shutter.started.connect(self.beam_current_status.run)
-        self.thread_beam_shutter.start()
-    
+        self.threads = []
+        for motor in self.motor_display:
+            reading_thread = Get_motor_reading(motor)
+            reading_thread.current_position.connect(motor.fun_update_status)
+            reading_thread.start()
+            self.threads.append(reading_thread)
+         
     def initUI(self):
         self.setWindowTitle(self.title)
         self.setGeometry(self.left, self.top, self.width, self.height)
@@ -295,15 +982,12 @@ class App(QWidget):
         self.txm_eng_list = {}
         self.txm_scan = {}
         self.txm_record_scan = {}
+        self.motor_display = []
         self.fn_calib_eng_file = "/nsls2/data/fxi-new/legacy/log/calib_new.csv"
         self.fpath_bluesky_startup = '/nsls2/data/fxi-new/shared/config/bluesky/profile_collection/startup'
         self.timestamp_cache_for_calib_eng_file = os.stat(self.fn_calib_eng_file)
         grid = QGridLayout()
-        # gpbox_prep = self.layout_GP_prepare()
-        # gpbox_msg = self.layout_msg()
-        # gpbox_xanes = self.layout_xanes()
-
-        #
+  
         grid.addWidget(self.layout_motor(), 0, 1)
         grid.addWidget(self.layout_instruction(), 1, 1)
         grid.addWidget(self.layout_scan(), 2, 1)
@@ -315,7 +999,7 @@ class App(QWidget):
         layout.addStretch()
         layout.setAlignment(QtCore.Qt.AlignTop)
         self.setLayout(layout)
-        self.pos_sync()
+        #self.pos_sync()
 
     def layout_instruction(self):
         gpbox = QGroupBox()
@@ -326,7 +1010,7 @@ class App(QWidget):
         lb_1.setFont(self.font2)
         lb_1.setText('Type 1 (single scan): choose "scan type" -> '
                      'input parameters (load and select "Energy list" if needed) ->' 
-                     '"check scan" -> "Run"')
+                     '" check scan" -> "Run"')
         lb_2 = QLabel()
         lb_2.setFont(self.font2)
         lb_2.setText('Type 2 (multi scans): after "check scan" -> '
@@ -370,6 +1054,28 @@ class App(QWidget):
         gpbox.setLayout(vbox_motor)
         return gpbox
 
+    def vbox_motor_xyz(self):
+        self.mot_sample_x = Sample_motor_layout(self, 'zps.sx', 'Pos. x', 'um')
+        self.mot_sample_y = Sample_motor_layout(self, 'zps.sy', 'Pos. y', 'um')
+        self.mot_sample_z = Sample_motor_layout(self, 'zps.sz', 'Pos. z', 'um')
+        self.mot_sample_r = Sample_motor_layout(self, 'zps.pi_r', 'Rotation', 'deg')
+        self.mot_sample_e = XEng_motor_layout(self, 'XEng', 'XEng', 'keV')
+        vbox = QVBoxLayout()
+        vbox.addLayout(self.mot_sample_x.layout())
+        vbox.addLayout(self.mot_sample_y.layout())
+        vbox.addLayout(self.mot_sample_z.layout())
+        vbox.addLayout(self.mot_sample_r.layout())
+        vbox.addLayout(self.mot_sample_e.layout())
+        vbox.addStretch()
+        vbox.setAlignment(QtCore.Qt.AlignLeft)
+
+        self.motor_display.append(self.mot_sample_x)
+        self.motor_display.append(self.mot_sample_y)
+        self.motor_display.append(self.mot_sample_z)
+        self.motor_display.append(self.mot_sample_r)
+        self.motor_display.append(self.mot_sample_e)
+        return vbox
+
     def vbox_motor_pos(self):
         lb_title = QLabel()
         lb_title.setFixedWidth(120)
@@ -391,23 +1097,21 @@ class App(QWidget):
         hbox.addWidget(self.pb_reset_rot_speed)
         hbox.addStretch()
         hbox.setAlignment(QtCore.Qt.AlignLeft)
-
-        layout_motor_x = self.hbox_motor_x()
-        layout_motor_y = self.hbox_motor_y()
-        layout_motor_z = self.hbox_motor_z()
-        layout_motor_r = self.hbox_motor_r()
-        layout_motor_e = self.hbox_motor_e()
+        # need to re-structure
+        #layout_motor_x = self.hbox_motor_x()
+        #layout_motor_y = self.hbox_motor_y()
+        #layout_motor_z = self.hbox_motor_z()
+        #layout_motor_r = self.hbox_motor_r()
+        #layout_motor_e = self.hbox_motor_e()
+        
         vbox_motor_pos = QVBoxLayout()
         vbox_motor_pos.addWidget(lb_title)
-        vbox_motor_pos.addLayout(layout_motor_x)
-        vbox_motor_pos.addLayout(layout_motor_y)
-        vbox_motor_pos.addLayout(layout_motor_z)
-        vbox_motor_pos.addLayout(layout_motor_r)
-        vbox_motor_pos.addLayout(layout_motor_e)
+
+        vbox_motor_pos.addLayout(self.vbox_motor_xyz())
         vbox_motor_pos.addLayout(hbox)
         vbox_motor_pos.setAlignment(QtCore.Qt.AlignTop)
         return vbox_motor_pos
-
+    '''
     def vbox_motor_step(self):
         lb_title = QLabel()
         lb_title.setFixedWidth(200)
@@ -520,312 +1224,8 @@ class App(QWidget):
         vbox.addLayout(hbox_6)
         vbox.setAlignment(QtCore.Qt.AlignTop)
         return vbox
-
-    def hbox_motor_x(self):
-        # lb_empty = QLabel()
-        # lb_empty.setFixedWidth(10)
-        lb_motor = QLabel()
-        lb_motor.setFixedWidth(70)
-        lb_motor.setText('piezo x:')
-        lb_motor.setFont(self.font2)
-
-        self.tx_setpos_x = QLineEdit()
-        self.tx_setpos_x.setFont(self.font2)
-        self.tx_setpos_x.setFixedWidth(100)
-        self.tx_setpos_x.setValidator(QDoubleValidator())
-        self.tx_setpos_x.returnPressed.connect(lambda: self.move_to_pos('x'))
-
-        self.lb_limit_x = QLabel()
-        self.lb_limit_x.setFixedWidth(120)
-        self.lb_limit_x.setText('(-4000, 4000)')
-        self.lb_limit_x.setFont(self.font2)
-
-        lb_unit = QLabel()
-        lb_unit.setText('um')
-        lb_unit.setFont(self.font2)
-        lb_unit.setFixedWidth(50)
-        lb_unit2 = QLabel()
-        lb_unit2.setText('um')
-        lb_unit2.setFont(self.font2)
-        lb_unit2.setFixedWidth(50)
-        lb_unit3 = QLabel()
-        lb_unit3.setText('um')
-        lb_unit3.setFont(self.font2)
-        lb_unit3.setFixedWidth(30)
-
-        self.lb_motor_pos_x = QLabel()
-        self.lb_motor_pos_x.setFixedWidth(80)
-        self.lb_motor_pos_x.setText('0')
-        self.lb_motor_pos_x.setFont(self.font2)
-        pb_motor_minus = QPushButton('-')
-        pb_motor_minus.setFixedWidth(40)
-        pb_motor_minus.setFont(self.font2)
-        pb_motor_minus.clicked.connect(lambda: self.move_motor_negative('x'))
-        pb_motor_plus = QPushButton('+')
-        pb_motor_plus.setFixedWidth(40)
-        pb_motor_plus.setFont(self.font2)
-        pb_motor_plus.clicked.connect(lambda: self.move_motor_positive('x'))
-
-        self.tx_step_x = QLineEdit()
-        self.tx_step_x.setFont(self.font2)
-        self.tx_step_x.setFixedWidth(80)
-        self.tx_step_x.setText('0')
-        self.tx_step_x.setValidator(QDoubleValidator())      
-
-        hbox = QHBoxLayout()
-        hbox.addWidget(lb_motor)
-        hbox.addWidget(self.lb_motor_pos_x)
-        hbox.addWidget(lb_unit)
-        hbox.addWidget(self.tx_setpos_x)
-        hbox.addWidget(lb_unit2)
-        hbox.addWidget(self.lb_limit_x)
-        hbox.addWidget(pb_motor_minus)
-        hbox.addWidget(self.tx_step_x)
-        hbox.addWidget(lb_unit3)
-        hbox.addWidget(pb_motor_plus)
-        hbox.setAlignment(QtCore.Qt.AlignLeft)
-        return hbox
-
-    def hbox_motor_y(self):
-        # lb_empty = QLabel()
-        # lb_empty.setFixedWidth(10)
-        lb_motor = QLabel()
-        lb_motor.setFixedWidth(70)
-        lb_motor.setText('piezo y:')
-        lb_motor.setFont(self.font2)
-
-        self.tx_setpos_y = QLineEdit()
-        self.tx_setpos_y.setFont(self.font2)
-        self.tx_setpos_y.setFixedWidth(100)
-        self.tx_setpos_y.returnPressed.connect(lambda: self.move_to_pos('y'))
-        self.tx_setpos_y.setValidator(QDoubleValidator())
-
-        self.lb_limit_y = QLabel()
-        self.lb_limit_y.setFixedWidth(120)
-        self.lb_limit_y.setText('(-2000, 4000)')
-        self.lb_limit_y.setFont(self.font2)
-
-        lb_unit = QLabel()
-        lb_unit.setText('um')
-        lb_unit.setFont(self.font2)
-        lb_unit.setFixedWidth(50)
-        lb_unit2 = QLabel()
-        lb_unit2.setText('um')
-        lb_unit2.setFont(self.font2)
-        lb_unit2.setFixedWidth(50)
-        lb_unit3 = QLabel()
-        lb_unit3.setText('um')
-        lb_unit3.setFont(self.font2)
-        lb_unit3.setFixedWidth(30)
-
-        self.lb_motor_pos_y = QLabel()
-        self.lb_motor_pos_y.setFixedWidth(80)
-        self.lb_motor_pos_y.setText('0')
-        self.lb_motor_pos_y.setFont(self.font2)
-        pb_motor_minus = QPushButton('-')
-        pb_motor_minus.setFixedWidth(40)
-        pb_motor_minus.setFont(self.font2)
-        pb_motor_minus.clicked.connect(lambda: self.move_motor_negative('y'))
-        pb_motor_plus = QPushButton('+')
-        pb_motor_plus.setFixedWidth(40)
-        pb_motor_plus.setFont(self.font2)
-        pb_motor_plus.clicked.connect(lambda: self.move_motor_positive('y'))
-
-        self.tx_step_y = QLineEdit()
-        self.tx_step_y.setFont(self.font2)
-        self.tx_step_y.setFixedWidth(80)
-        self.tx_step_y.setText('0')
-        self.tx_step_y.setValidator(QDoubleValidator())   
-
-        hbox = QHBoxLayout()
-        hbox.addWidget(lb_motor)
-        hbox.addWidget(self.lb_motor_pos_y)
-        hbox.addWidget(lb_unit)
-        hbox.addWidget(self.tx_setpos_y)
-        hbox.addWidget(lb_unit2)
-        hbox.addWidget(self.lb_limit_y)
-        hbox.addWidget(pb_motor_minus)
-        hbox.addWidget(self.tx_step_y)
-        hbox.addWidget(lb_unit3)
-        hbox.addWidget(pb_motor_plus)
-        hbox.setAlignment(QtCore.Qt.AlignLeft)
-        return hbox
-
-    def hbox_motor_z(self):
-        # lb_empty = QLabel()
-        # lb_empty.setFixedWidth(10)
-        lb_motor = QLabel()
-        lb_motor.setFixedWidth(70)
-        lb_motor.setText('piezo z:')
-        lb_motor.setFont(self.font2)
-
-        self.tx_setpos_z = QLineEdit()
-        self.tx_setpos_z.setFont(self.font2)
-        self.tx_setpos_z.setFixedWidth(100)
-        self.tx_setpos_z.returnPressed.connect(lambda: self.move_to_pos('z'))
-        self.tx_setpos_z.setValidator(QDoubleValidator())
-
-        self.lb_limit_z = QLabel()
-        self.lb_limit_z.setFixedWidth(120)
-        self.lb_limit_z.setText('(-2000, 2000)')
-        self.lb_limit_z.setFont(self.font2)
-
-        lb_unit = QLabel()
-        lb_unit.setText('um')
-        lb_unit.setFont(self.font2)
-        lb_unit.setFixedWidth(50)
-        lb_unit2 = QLabel()
-        lb_unit2.setText('um')
-        lb_unit2.setFont(self.font2)
-        lb_unit2.setFixedWidth(50)
-        lb_unit3 = QLabel()
-        lb_unit3.setText('um')
-        lb_unit3.setFont(self.font2)
-        lb_unit3.setFixedWidth(30)
-
-        self.lb_motor_pos_z = QLabel()
-        self.lb_motor_pos_z.setFixedWidth(80)
-        self.lb_motor_pos_z.setText('0')
-        self.lb_motor_pos_z.setFont(self.font2)
-        pb_motor_minus = QPushButton('-')
-        pb_motor_minus.setFont(self.font2)
-        pb_motor_minus.setFixedWidth(40)
-        pb_motor_minus.clicked.connect(lambda: self.move_motor_negative('z'))
-        pb_motor_plus = QPushButton('+')
-        pb_motor_plus.setFont(self.font2)
-        pb_motor_plus.setFixedWidth(40)
-        pb_motor_plus.clicked.connect(lambda: self.move_motor_positive('z'))
-
-        self.tx_step_z = QLineEdit()
-        self.tx_step_z.setFont(self.font2)
-        self.tx_step_z.setFixedWidth(80)
-        self.tx_step_z.setText('0')
-        self.tx_step_z.setValidator(QDoubleValidator())   
-
-        hbox = QHBoxLayout()
-        hbox.addWidget(lb_motor)
-        hbox.addWidget(self.lb_motor_pos_z)
-        hbox.addWidget(lb_unit)
-        hbox.addWidget(self.tx_setpos_z)
-        hbox.addWidget(lb_unit2)
-        hbox.addWidget(self.lb_limit_z)
-        hbox.addWidget(pb_motor_minus)
-        hbox.addWidget(self.tx_step_z)
-        hbox.addWidget(lb_unit3)
-        hbox.addWidget(pb_motor_plus)
-        hbox.setAlignment(QtCore.Qt.AlignLeft)
-        return hbox
-
-    def hbox_motor_r(self):
-        # lb_empty = QLabel()
-        # lb_empty.setFixedWidth(10)
-        lb_motor = QLabel()
-        lb_motor.setFixedWidth(70)
-        lb_motor.setText('rotary r:')
-        lb_motor.setFont(self.font2)
-
-        self.tx_setpos_r = QLineEdit()
-        self.tx_setpos_r.setFont(self.font2)
-        self.tx_setpos_r.setFixedWidth(100)
-        self.tx_setpos_r.setValidator(QDoubleValidator())
-        self.tx_setpos_r.returnPressed.connect(lambda: self.move_to_pos('r'))
-
-        self.lb_limit_r = QLabel()
-        self.lb_limit_r.setFixedWidth(120)
-        self.lb_limit_r.setText('(-180, 180)')
-        self.lb_limit_r.setFont(self.font2)
-
-        lb_unit = QLabel()
-        lb_unit.setText('deg')
-        lb_unit.setFont(self.font2)
-        lb_unit.setFixedWidth(50)
-
-        lb_unit2 = QLabel()
-        lb_unit2.setText('deg')
-        lb_unit2.setFont(self.font2)
-        lb_unit2.setFixedWidth(50)
-
-        lb_unit3 = QLabel()
-        lb_unit3.setText('deg')
-        lb_unit3.setFont(self.font2)
-        lb_unit3.setFixedWidth(30)
-
-        self.lb_motor_pos_r = QLabel()
-        self.lb_motor_pos_r.setFixedWidth(80)
-        self.lb_motor_pos_r.setText('0')
-        self.lb_motor_pos_r.setFont(self.font2)
-        pb_motor_minus = QPushButton('-')
-        pb_motor_minus.setFont(self.font2)
-        pb_motor_minus.setFixedWidth(40)
-        pb_motor_minus.clicked.connect(lambda: self.move_motor_negative('r'))
-        pb_motor_plus = QPushButton('+')
-        pb_motor_plus.setFont(self.font2)
-        pb_motor_plus.setFixedWidth(40)
-        pb_motor_plus.clicked.connect(lambda: self.move_motor_positive('r'))
-
-        self.tx_step_r = QLineEdit()
-        self.tx_step_r.setFont(self.font2)
-        self.tx_step_r.setFixedWidth(80)
-        self.tx_step_r.setText('0')
-        self.tx_step_r.setValidator(QDoubleValidator())   
-
-        hbox = QHBoxLayout()
-        hbox.addWidget(lb_motor)
-        hbox.addWidget(self.lb_motor_pos_r)
-        hbox.addWidget(lb_unit)
-        hbox.addWidget(self.tx_setpos_r)
-        hbox.addWidget(lb_unit2)
-        hbox.addWidget(self.lb_limit_r)
-        hbox.addWidget(pb_motor_minus)
-        hbox.addWidget(self.tx_step_r)
-        hbox.addWidget(lb_unit3)
-        hbox.addWidget(pb_motor_plus)
-        hbox.setAlignment(QtCore.Qt.AlignLeft)
-        return hbox
-
-    def hbox_motor_e(self):
-        # lb_empty = QLabel()
-        # lb_empty.setFixedWidth(10)
-        lb_motor = QLabel()
-        lb_motor.setFixedWidth(70)
-        lb_motor.setText('XEng:')
-        lb_motor.setFont(self.font2)
-
-        self.tx_setpos_e = QLineEdit()
-        self.tx_setpos_e.setFont(self.font2)
-        self.tx_setpos_e.setFixedWidth(100)
-        self.tx_setpos_e.setValidator(QDoubleValidator())
-        self.tx_setpos_e.returnPressed.connect(self.move_to_energy)
-
-        lb_unit = QLabel()
-        lb_unit.setText('keV')
-        lb_unit.setFont(self.font2)
-        lb_unit.setFixedWidth(50)
-
-        lb_unit2 = QLabel()
-        lb_unit2.setText('keV')
-        lb_unit2.setFont(self.font2)
-        lb_unit2.setFixedWidth(50)
-
-        self.lb_note = QLabel()
-        self.lb_note.setFixedWidth(300)
-        self.lb_note.setText('(calib. pos)')
-        self.lb_note.setFont(self.font2)
-
-        self.lb_motor_pos_e = QLabel()
-        self.lb_motor_pos_e.setFixedWidth(80)
-        self.lb_motor_pos_e.setText('0')
-        self.lb_motor_pos_e.setFont(self.font2)
-        hbox = QHBoxLayout()
-        hbox.addWidget(lb_motor)
-        hbox.addWidget(self.lb_motor_pos_e)
-        hbox.addWidget(lb_unit)
-        hbox.addWidget(self.tx_setpos_e)
-        hbox.addWidget(lb_unit2)
-        hbox.addWidget(self.lb_note)
-        hbox.setAlignment(QtCore.Qt.AlignLeft)
-        return hbox
-
+    '''
+ 
     def vbox_pos_select_for_scan(self):
         lb_pos = QLabel()
         lb_pos.setFixedWidth(200)
@@ -837,8 +1237,6 @@ class App(QWidget):
         self.lst_scan_pos.setFixedWidth(100)
         self.lst_scan_pos.setFixedHeight(120)
         self.lst_scan_pos.setFont(self.font2)
-        #self.lst_scan_pos.itemClicked.connect(self.show_pos_clicked)
-        #self.lst_scan_pos.setSelectionMode(QAbstractItemView.SingleSelection)
 
         self.pb_pos_rm_select = QPushButton('remove')
         self.pb_pos_rm_select.setFixedWidth(100)
@@ -1016,66 +1414,11 @@ class App(QWidget):
         return vbox_lst
 
     def vbox_beam_shutter(self):
-        lb_beam = QLabel()
-        lb_beam.setText('Beam current:')
-        lb_beam.setFont(self.font1)
-        lb_beam.setFixedWidth(120)
-        
-        self.lb_beam_current = QLabel()
-        #self.lb_beam_current.setText('Beam current:')
-        self.lb_beam_current.setFixedWidth(120)
-        self.lb_beam_current.setFont(self.font1)
-        self.lb_beam_current.setStyleSheet('color: rgb(200, 50, 50);')
-
-        hbox_beam = QHBoxLayout()
-        hbox_beam.addWidget(lb_beam)
-        hbox_beam.addWidget(self.lb_beam_current)
-        hbox_beam.setAlignment(QtCore.Qt.AlignLeft)
-
-        lb_shutter = QLabel()
-        lb_shutter.setText('Shutter status:')
-        lb_shutter.setFixedHeight(40)
-        lb_shutter.setFont(self.font1)
-        lb_shutter.setFixedWidth(120)
-
-        self.lb_shutter_status = QLabel()
-        self.lb_shutter_status.setFixedWidth(120)
-        self.lb_shutter_status.setFixedHeight(40)
-        self.lb_shutter_status.setFont(self.font1)
-        self.lb_shutter_status.setStyleSheet('color: rgb(200, 50, 50);')
-
-        hbox_shutter = QHBoxLayout()
-        hbox_shutter.addWidget(lb_shutter)
-        hbox_shutter.addWidget(self.lb_shutter_status)
-        hbox_shutter.setAlignment(QtCore.Qt.AlignLeft)
-
-        self.pb_open_shutter = QPushButton("Open shutter")
-        self.pb_open_shutter.setFont(self.font2)
-        self.pb_open_shutter.setFixedHeight(40)
-        self.pb_open_shutter.setFixedWidth(120)
-        self.pb_open_shutter.clicked.connect(self.open_shutter)
-
-        self.pb_close_shutter = QPushButton("Close shutter")
-        self.pb_close_shutter.setFont(self.font2)
-        self.pb_close_shutter.setFixedHeight(40)
-        self.pb_close_shutter.setFixedWidth(120)
-        self.pb_close_shutter.clicked.connect(self.close_shutter)
-
-        vbox_shutter_click = QVBoxLayout()
-        vbox_shutter_click.addWidget(self.pb_open_shutter)
-        vbox_shutter_click.addWidget(self.pb_close_shutter)
-        vbox_shutter_click.setAlignment(QtCore.Qt.AlignLeft)
-
-        vbox = QVBoxLayout()
-        vbox.addLayout(hbox_beam)
-        vbox.addLayout(hbox_shutter)
-        vbox.addLayout(vbox_shutter_click)
-        vbox.setAlignment(QtCore.Qt.AlignTop)
-        vbox.addStretch()
+        self.shutter = Shutter(self)
+        self.motor_display.append(self.shutter)
+        vbox = self.shutter.layout()
         return vbox
-
-
-
+ 
     #############################
 
     def layout_scan(self):
@@ -1109,6 +1452,7 @@ class App(QWidget):
         return gpbox
 
     def layout_pre_defined_scan(self):
+        lb_empty = QLabel()
         lb_space1 = QLabel()
         lb_space1.setFixedWidth(20)
 
@@ -1168,8 +1512,10 @@ class App(QWidget):
         vbox_scan.addWidget(lb_v_space1)
         vbox_scan.addLayout(scan_arg)
         vbox_scan.addLayout(scan_cmd)
+        vbox_scan.addWidget(lb_empty)
         # vbox_scan.addLayout(custom_script)
         vbox_scan.setAlignment(QtCore.Qt.AlignTop)
+        vbox_scan.addStretch()
 
         return vbox_scan
 
@@ -1179,8 +1525,9 @@ class App(QWidget):
         self.lb_scan_msg.setText("Scan command / Message:")
         self.lb_scan_msg.setFixedHeight(28)
         self.tx_scan_msg = QPlainTextEdit()
+        #self.tx_scan_msg = ConsolText()
         self.tx_scan_msg.setFixedWidth(700)
-        self.tx_scan_msg.setFixedHeight(240)
+        self.tx_scan_msg.setFixedHeight(300)
         self.tx_scan_msg.setFont(self.font2)
 
         tx_empty = QLineEdit()
@@ -1189,22 +1536,22 @@ class App(QWidget):
         
         lb_ipython_msg1 = QLabel()
         lb_ipython_msg1.setFont(self.font1)
-        lb_ipython_msg1.setFixedWidth(450)        
-        lb_ipython_msg1.setText('To initiate scan environment, run this command first:')
+        lb_ipython_msg1.setFixedWidth(320)        
+        lb_ipython_msg1.setText('To initiate environment, run command:')
 
         lb_ipython_msg2 = QLabel()
         lb_ipython_msg2.setFont(self.font1)
-        lb_ipython_msg2.setFixedWidth(450)
-        lb_ipython_msg2.setText('If witch from GUI, before any scan, update scan-id by:')
+        lb_ipython_msg2.setFixedWidth(320)
+        lb_ipython_msg2.setText('Before first scan here, update scan-id:')
 
         tx_ipython_msg1 = QLineEdit()
         tx_ipython_msg1.setFont(self.font2)
-        tx_ipython_msg1.setFixedWidth(400)
-        tx_ipython_msg1.setText('%run -i load_base.py')
+        tx_ipython_msg1.setFixedWidth(550)
+        tx_ipython_msg1.setText('%run -i /nsls2/data/fxi-new/shared/software/fxi_control/load_base.py')
 
         tx_ipython_msg2 = QLineEdit()
         tx_ipython_msg2.setFont(self.font2)
-        tx_ipython_msg2.setFixedWidth(400)
+        tx_ipython_msg2.setFixedWidth(550)
         tx_ipython_msg2.setText('RE.md["scan_id"] = db[-1].start["scan_id"]')
 
         hbox_ipython1 = QHBoxLayout()
@@ -1219,15 +1566,12 @@ class App(QWidget):
         hbox_ipython2.addStretch()
         hbox_ipython2.setAlignment(QtCore.Qt.AlignLeft)
     
-        #self.ip_widget = ConsoleWidget()
         self.ip_widget = make_jupyter_widget_with_kernel()        
         self.ip_widget.setFixedWidth(900)
-        self.ip_widget.setFixedHeight(300)
+        self.ip_widget.setFixedHeight(360)
         self.ip_widget.set_default_style('linux')
         self.ip_widget.font = QtGui.QFont(self.ip_widget.font.family(), 12);
         
-        #fn = '/home/mingyuan/Work/txm_control/00_base.py'
-        #self.ip_widget.execfile(fn)
         hbox_run_sid = self.hbox_run_sid()
         hbox_scan_id = self.hbox_scan_id()
 
@@ -1254,13 +1598,7 @@ class App(QWidget):
         hbox.addLayout(vbox1)
         hbox.addLayout(vbox2)
         hbox.addStretch()
-        #hbox.setAlignment(QtCore.Qt.AlignLeft)
-        #vbox = QVBoxLayout()
-        #vbox.addWidget(self.lb_scan_msg)
-        #vbox.addLayout(hbox)
-        #vbox.addWidget(self.ip_widget)
-        
-        #vbox.setAlignment(QtCore.Qt.AlignTop)
+
         return hbox
 
     def hbox_run_sid(self):
@@ -1379,11 +1717,7 @@ class App(QWidget):
         self.lst_scan.setFont(self.font2)
         self.lst_scan.setSelectionMode(QAbstractItemView.SingleSelection)
         self.load_scan_type_list(1) # load commonly used scans
-        '''
-        for k in scan_list.keys():
-            name = ' '.join(t for t in k.split('_')[1:])
-            self.lst_scan.addItem(name)
-        '''
+
         self.lst_scan.itemClicked.connect(self.show_scan_example)
         self.lst_scan.setSelectionMode(QAbstractItemView.SingleSelection)
 
@@ -1461,6 +1795,7 @@ class App(QWidget):
         self.lst_eng_list.setFixedHeight(160)
         self.lst_eng_list.setFont(self.font2)
         self.lst_eng_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.lst_eng_list.clicked.connect(self.select_eng_list)
 
         lb_name = QLabel()
         lb_name.setText('Name:')
@@ -1585,9 +1920,7 @@ class App(QWidget):
         lb_title = QLabel()
         lb_title.setText('Operators')
         lb_title.setFont(self.font1)
-        # lb_title.setStyleSheet('color: rgb(0, 80, 255);')
 
-        # radio button for operators
 
         self.rd_op_repeat_s = QRadioButton('Repeat')
         # self.rd_op_repeat_s.setStyleSheet('color: rgb(0, 80, 255);')
@@ -1874,208 +2207,6 @@ class App(QWidget):
             ss = float(self.tx_step_custom.text())
         return ss
 
-    def move_motor_positive(self, label):
-        #ss = self.get_step_size()
-        if label == 'x':
-            ss = float(self.tx_step_x.text())
-            current_set = float(self.lb_motor_pos_x.text())
-            self.tx_setpos_x.setText(f'{(current_set + ss):4.3f}')
-            self.move_to_pos('x')
-        elif label == 'y':
-            ss = float(self.tx_step_y.text())
-            current_set = float(self.lb_motor_pos_y.text())
-            self.tx_setpos_y.setText(f'{(current_set + ss):4.3f}')
-            self.move_to_pos('y')
-        elif label == 'z':
-            ss = float(self.tx_step_z.text())
-            current_set = float(self.lb_motor_pos_z.text())
-            self.tx_setpos_z.setText(f'{(current_set + ss):4.3f}')
-            self.move_to_pos('z')
-        elif label == 'r':
-            ss = float(self.tx_step_r.text())
-            current_set = float(self.lb_motor_pos_r.text())
-            ss = float(self.tx_rot_step_custom.text())
-            self.tx_setpos_r.setText(f'{(current_set + ss):4.3f}')
-            self.move_to_pos('r')
-
-    def move_motor_negative(self, label):
-        # ss = self.get_step_size()
-        if label == 'x':
-            ss = float(self.tx_step_x.text())
-            current_set = float(self.lb_motor_pos_x.text())
-            self.tx_setpos_x.setText(f'{(current_set - ss):4.3f}')
-            self.move_to_pos('x')
-        elif label == 'y':
-            ss = float(self.tx_step_y.text())
-            current_set = float(self.lb_motor_pos_y.text())
-            self.tx_setpos_y.setText(f'{(current_set - ss):4.3f}')
-            self.move_to_pos('y')
-        elif label == 'z':
-            ss = float(self.tx_step_z.text())
-            current_set = float(self.lb_motor_pos_z.text())
-            self.tx_setpos_z.setText(f'{(current_set - ss):4.3f}')
-            self.move_to_pos('z')
-        elif label == 'r':
-            ss = float(self.tx_step_r.text())
-            current_set = float(self.lb_motor_pos_r.text())
-            ss = float(self.tx_rot_step_custom.text())
-            self.tx_setpos_r.setText(f'{(current_set - ss):4.3f}')
-            self.move_to_pos('r')
-
-    def check_pos_limit(self, label):
-        if label == 'x':
-            limit = self.lb_limit_x.text()[1:-1].split(',')
-            l_l = float(limit[0])
-            l_h = float(limit[1])
-            try:
-                val = np.float(self.tx_setpos_x.text())
-            except:
-                val = np.float(self.lb_motor_pos_x.text())
-            if val >= l_l and val <= l_h:
-                flag = 1
-            else:
-                flag = 0
-        if label == 'y':
-            limit = self.lb_limit_y.text()[1:-1].split(',')
-            l_l = float(limit[0])
-            l_h = float(limit[1])
-            try:
-                val = np.float(self.tx_setpos_y.text())
-            except:
-                val = np.float(self.lb_motor_pos_y.text())
-            if val >= l_l and val <= l_h:
-                flag = 1
-            else:
-                flag = 0
-        if label == 'z':
-            limit = self.lb_limit_z.text()[1:-1].split(',')
-            l_l = float(limit[0])
-            l_h = float(limit[1])
-            try:
-                val = np.float(self.tx_setpos_z.text())
-            except:
-                val = np.float(self.lb_motor_pos_z.text())
-            if val >= l_l and val <= l_h:
-                flag = 1
-            else:
-                flag = 0
-        if label == 'r':
-            limit = self.lb_limit_r.text()[1:-1].split(',')
-            l_l = float(limit[0])
-            l_h = float(limit[1])
-            try:
-                val = np.float(self.tx_setpos_r.text())
-            except:
-                val = np.float(self.lb_motor_pos_r.text())
-            if val >= l_l and val <= l_h:
-                flag = 1
-            else:
-                flag = 0
-        return flag, val
-
-    def move_to_pos(self, label):
-        if label == 'x':
-            flag, val = self.check_pos_limit('x')
-            if flag:
-                try:
-                    self.tx_setpos_x.setDisabled(True)
-                    RE(mv(zps.sx, val))
-                    #RE(abs_set(zps.sx, val))
-                    val_rb = zps.sx.position
-                    self.lb_motor_pos_x.setText(f'{val_rb:4.4f}')
-                except:
-                    msg = 'fails to move motor x'
-                    print(msg)
-                    self.tx_scan_msg.setPlainText(msg)
-                finally:
-                    self.tx_setpos_x.setEnabled(True)
-            else:
-                self.tx_setpos_x.setText(self.lb_motor_pos_x.text())
-                msg = 'out of limit'
-                print(msg)
-                self.tx_scan_msg.setPlainText(msg)
-        if label == 'y':
-            flag, val = self.check_pos_limit('y')
-            if flag:
-                try:
-                    self.tx_setpos_y.setDisabled(True)
-                    RE(mv(zps.sy, val))
-                    #RE(abs_set(zps.sy, val))
-                    val_rb = zps.sy.position
-                    self.lb_motor_pos_y.setText(f'{val_rb:4.4f}')
-                except:
-                    msg = 'fails to move motor y'
-                    print(msg)
-                    self.tx_scan_msg.setPlainText(msg)
-                finally:
-                    self.tx_setpos_y.setEnabled(True)
-            else:
-                self.tx_setpos_y.setText(self.lb_motor_pos_y.text())
-                msg = 'out of limit'
-                print(msg)
-                self.tx_scan_msg.setPlainText(msg)
-        if label == 'z':
-            flag, val = self.check_pos_limit('z')
-            if flag:
-                try:
-                    self.tx_setpos_z.setDisabled(True)
-                    RE(mv(zps.sz, val))
-                    #RE(abs_set(zps.sz, val))
-                    val_rb = zps.sz.position
-                    self.lb_motor_pos_z.setText(f'{val_rb:4.4f}')
-                except:
-                    msg = 'fails to move motor z'
-                    print(msg)
-                    self.tx_scan_msg.setPlainText(msg)
-                finally:
-                    self.tx_setpos_z.setEnabled(True)
-            else:
-                self.tx_setpos_z.setText(self.lb_motor_pos_z.text())
-                msg = 'out of limit'
-                print(msg)
-                self.tx_scan_msg.setPlainText(msg)
-        if label == 'r':
-            flag, val = self.check_pos_limit('r')
-            if flag:
-                try:
-                    self.tx_setpos_r.setDisabled(True)
-                    RE(mv(zps.pi_r, val))
-                    #RE(abs_set(zps.pi_r, val))
-                    val_rb = zps.pi_r.position
-                    self.lb_motor_pos_r.setText(f'{val_rb:4.4f}')
-                    self.tx_setpos_r.setEnabled(True)
-                except:
-                    msg = 'fails to move motor r'
-                    print(msg)
-                    self.tx_scan_msg.setPlainText(msg)
-                finally:
-                    self.tx_setpos_r.setEnabled(True)
-            else:
-                self.tx_setpos_r.setText(self.lb_motor_pos_r.text())
-                msg = 'out of limit'
-                print(msg)
-                self.tx_scan_msg.setPlainText(msg)
-
-    def move_to_energy(self):
-        try:
-            val = float(self.tx_setpos_e.text())
-        except:
-            val = float(self.lb_motor_pos_e.text())
-
-        try:
-            print(f'TEST: will do: RE(move_zp_ccd({val}))')
-            self.tx_setpos_e.setDisabled(True)
-            RE(move_zp_ccd(val))
-            val = XEng.position
-        except Exception as err:
-            msg = str(err)
-            print(msg)
-            self.tx_scan_msg.setPlainText(msg)
-        finally:
-            self.tx_setpos_e.setEnabled(True)
-        self.lb_motor_pos_e.setText(f'{val:2.5f}')
-        self.scan_tx['XEng'].setText(f'{val:2.5f}')
-
     def pos_sync(self):
         try:
             msg = ''
@@ -2092,29 +2223,14 @@ class App(QWidget):
             else:
                 self.lb_current_sid.setText(str(sid2))
             
-            self.display_calib_eng_only()
-            msg += 'update energy calibration finished.\n'
+            #self.display_calib_eng_only()
+            msg += '\nupdate energy calibration finished.\n'
         except:
             msg += 'fails to connect database to retrieve scan_ID\n'
         finally:
             print(msg)
             self.tx_scan_msg.setPlainText(msg)
-        try:
-            x = zps.sx.position
-            y = zps.sy.position
-            z = zps.sz.position
-            r = zps.pi_r.position
-            eng = XEng.position
-            self.lb_motor_pos_x.setText(f'{x:5.4f}')
-            self.lb_motor_pos_y.setText(f'{y:5.4f}')
-            self.lb_motor_pos_z.setText(f'{z:5.4f}')
-            self.lb_motor_pos_r.setText(f'{r:5.4f}')
-            self.lb_motor_pos_e.setText(f'{eng:2.5f}')
-        except:
-            msg += 'fails to connect physical motor (zps.sx, zps.sy, spz.sz and zps.pi_r)\n'
-        finally:
-            print(msg)
-            self.tx_scan_msg.setPlainText(msg)
+
         try:
             self.display_calib_eng_only()
         except:
@@ -2122,73 +2238,8 @@ class App(QWidget):
         finally:
             print(msg)
             self.tx_scan_msg.setPlainText(msg)
-        # need to synchronize with CSS
-        self.tx_setpos_x.setText(self.lb_motor_pos_x.text())
-        self.tx_setpos_y.setText(self.lb_motor_pos_y.text())
-        self.tx_setpos_z.setText(self.lb_motor_pos_z.text())
-        self.tx_setpos_r.setText(self.lb_motor_pos_r.text())
-        self.tx_setpos_e.setText(self.lb_motor_pos_e.text())
-
-        try:
-            lim_x = zps.sx.limits
-            lim_y = zps.sy.limits
-            lim_z = zps.sz.limits
-            lim_r = zps.pi_r.limits
-            self.lb_limit_x.setText(f'({int(lim_x[0])}, {int(lim_x[1])})')
-            self.lb_limit_y.setText(f'({int(lim_y[0])}, {int(lim_y[1])})')
-            self.lb_limit_z.setText(f'({int(lim_z[0])}, {int(lim_z[1])})')
-            self.lb_limit_r.setText(f'({int(lim_r[0])}, {int(lim_r[1])})')
-        except:
-            msg += 'fails to connect physical motor (zps.sx, zps.sy, spz.sz and zps.pi_r) to retieve motor limits\n'
-        finally:    
-            print(msg)
         msg += 'motor synchronization finshed.'    
         self.tx_scan_msg.setPlainText(msg)
-
-    def repeat_pos_sync(self):
-        while(True):
-            try:
-                x = zps.sx.position
-                y = zps.sy.position
-                z = zps.sz.position
-                r = zps.pi_r.position
-                eng = XEng.position
-                self.lb_motor_pos_x.setText(f'{x:5.4f}')
-                self.lb_motor_pos_y.setText(f'{y:5.4f}')
-                self.lb_motor_pos_z.setText(f'{z:5.4f}')
-                self.lb_motor_pos_r.setText(f'{r:5.4f}')
-                self.lb_motor_pos_e.setText(f'{eng:2.5f}')
-                '''
-                timestamp_calib_eng_file = os.stat(self.fn_calib_eng_file)
-                if self.timestamp_cache_for_calib_eng_file != timestamp_calib_eng_file:
-                    print('update the energy calibration file')
-                    self.display_calib_eng_only()
-                '''
-                #sid = db[-1].start['scan_id']
-                #self.lb_current_sid.setText(str(sid))
-                time.sleep(0.2)
-            except Exception as err:
-                print(err)
-
-    def open_shutter(self):
-        try:
-            self.pb_open_shutter.setDisabled(True)
-            RE(_open_shutter())
-        except Exception as err:
-            print(err)
-        finally:
-            self.pb_open_shutter.setDisabled(False)
-        
-
-    def close_shutter(self):
-        try:
-            self.pb_close_shutter.setDisabled(True)
-            RE(_close_shutter())
-        except Exception as err:
-            print(err)
-        finally:
-            self.pb_close_shutter.setDisabled(False)
-        
 
     def reset_r_speed(self):
         try:
@@ -2223,10 +2274,11 @@ class App(QWidget):
         self.lb_pos_r.setText(f'{r:4.3f}')
 
     def pos_record(self):
-        x = float(self.lb_motor_pos_x.text())
-        y = float(self.lb_motor_pos_y.text())
-        z = float(self.lb_motor_pos_z.text())
-        r = float(self.lb_motor_pos_r.text())
+        x = float(self.mot_sample_x.label_motor_pos.text())
+        y = float(self.mot_sample_y.label_motor_pos.text())
+        z = float(self.mot_sample_z.label_motor_pos.text())
+        r = float(self.mot_sample_r.label_motor_pos.text())
+
         self.pos_num += 1
         pos_id = self.get_available_pos_id()
         self.pos[f'pos_{pos_id:02d}'] = {}
@@ -2270,10 +2322,11 @@ class App(QWidget):
     def pos_update(self):
         item = self.lst_pos.selectedItems()
         if len(item):
-            x = float(self.lb_motor_pos_x.text())
-            y = float(self.lb_motor_pos_y.text())
-            z = float(self.lb_motor_pos_z.text())
-            r = float(self.lb_motor_pos_r.text())
+            x = float(self.mot_sample_x.label_motor_pos.text())
+            y = float(self.mot_sample_y.label_motor_pos.text())
+            z = float(self.mot_sample_z.label_motor_pos.text())
+            r = float(self.mot_sample_r.label_motor_pos.text())
+
             pos = item[0].text()
             self.pos[pos]['x'] = x
             self.pos[pos]['y'] = y
@@ -2299,10 +2352,11 @@ class App(QWidget):
             self.move_to_pos('r')
 
     def pos_record_bkg(self):
-        x = float(self.lb_motor_pos_x.text())
-        y = float(self.lb_motor_pos_y.text())
-        z = float(self.lb_motor_pos_z.text())
-        r = float(self.lb_motor_pos_r.text())
+        x = float(self.mot_sample_x.label_motor_pos.text())
+        y = float(self.mot_sample_y.label_motor_pos.text())
+        z = float(self.mot_sample_z.label_motor_pos.text())
+        r = float(self.mot_sample_r.label_motor_pos.text())
+
         self.pos['Bkg'] = {}
         self.pos['Bkg']['x'] = x
         self.pos['Bkg']['y'] = y
@@ -2317,7 +2371,6 @@ class App(QWidget):
         self.add_bkg_pos()
 
     def show_scan_example_sub(self, txm_scan):
-        
         for i in range(20):
             self.scan_lb[f'lb_{i}'].setText(f'param {i}:')
             self.scan_lb[f'lb_{i}'].setVisible(False)
@@ -2359,6 +2412,7 @@ class App(QWidget):
         txm_scan = scan_list[self.scan_name]
         self.show_scan_example_sub(txm_scan)
         self.add_bkg_pos()
+        self.select_eng_list()
 
     def add_bkg_pos(self):
         try:
@@ -2465,7 +2519,6 @@ class App(QWidget):
             item = self.lst_scan_pos.item(i)
             pos = item.text()
             self.sample_pos[pos] = self.pos[pos]
-
 
     def check_scan(self):
         self.txm_scan = {}
@@ -2593,10 +2646,10 @@ class App(QWidget):
         self.tx_scan_msg.setPlainText(cmd_all)
 
     def get_current_pos(self):
-        x = eval(self.lb_motor_pos_x.text())
-        y = eval(self.lb_motor_pos_y.text())
-        z = eval(self.lb_motor_pos_z.text())
-        r = eval(self.lb_motor_pos_r.text())
+        x = float(self.mot_sample_x.label_motor_pos.text())
+        y = float(self.mot_sample_y.label_motor_pos.text())
+        z = float(self.mot_sample_z.label_motor_pos.text())
+        r = float(self.mot_sample_r.label_motor_pos.text())
         return x, y, z, r
 
     def get_available_eng_list_id(self):
@@ -2611,14 +2664,16 @@ class App(QWidget):
         return pos_available
 
     def load_eng_list(self):
+        global txm
         options = QFileDialog.Option()
         file_type = 'txt files (*.txt)'
-        fn, _ = QFileDialog.getOpenFileName(txm, "QFileDialog.getOpenFileName()", "", file_type, options=options)
+        fn, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "", file_type, options=options)
         if fn:
             try:
                 eng_list = np.array(np.loadtxt(fn))
             except:
-                eng_list = [eval(self.lb_motor_pos_e.text())]
+                #eng_list = [eval(self.lb_motor_pos_e.text())]
+                eng_list = [eval(self.mot_sample_e.label_motor_pos.text())]
             eng_name = self.tx_eng_name.text()
             available_id = self.get_available_eng_list_id()
             eng_name = f'E_{available_id:02d}_{eng_name}'
@@ -2638,8 +2693,6 @@ class App(QWidget):
             for i in range(20):
                 if 'eng_list' in self.scan_lb[f'lb_{i}'].text():
                     break
-            # EL[eng_name] = eng_val
-            # self.scan_tx[f'tx_{i}'].setText(f'EL["{eng_name}"]')
             self.scan_tx[f'tx_{i}'].setText(eng_name)
 
     def save_eng_list(self):
@@ -2691,7 +2744,8 @@ class App(QWidget):
         self.lst_eng_list.clear()
 
     def use_current_eng(self):
-        eng = self.lb_motor_pos_e.text()
+        eng = self.mot_sample_e.label_motor_pos.text()
+        #eng = self.lb_motor_pos_e.text()
         self.scan_tx['XEng'].setText(eng)
 
     def run_pause(self):
@@ -2794,7 +2848,7 @@ class App(QWidget):
             self.pb_run_scan.setText('Run')
             self.pb_run_scan.setEnabled(True)
             self.pb_pause_scan.setEnabled(False)
-            self.pos_sync()
+            #self.pos_sync()
             print(msg)
             self.tx_scan_msg.setPlainText(msg)
             try:
@@ -2836,20 +2890,19 @@ class App(QWidget):
             scan_list = merge_dict(scan_list, tmp_scan_list)
             
             self.lst_scan.clear()
-            QApplication.processEvents() 
+            #QApplication.processEvents() 
             for k in tmp_scan_list.keys():
                 name = ' '.join(t for t in k.split('_')[1:])
                 self.lst_scan.addItem(name)
-                print(name)
-            QApplication.processEvents()  
+                #print(name)
+            #QApplication.processEvents()  
         except Exception as err:
             msg = str(err) + '\n'
         finally:
             print(msg)
             self.tx_scan_msg.setPlainText(msg)
 
-    def update_scan_type_list(self, scan_type=1):
-        
+    def update_scan_type_list(self, scan_type=1):     
         if scan_type == 1: # update common scan
             fname_read = self.fpath_bluesky_startup + '/41-scans.py'
             fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_common.py'
@@ -2870,8 +2923,6 @@ class App(QWidget):
             prepare_scan_list(fname_read, fname_write)  
             self.load_scan_type_list(3)
         
-        
-
     def record_scan(self):
         # need to 'check scan' first
         n = self.lst_record_scan.count()
@@ -3018,7 +3069,7 @@ class App(QWidget):
                     cmd_tmp = ' ' * (n_repeat * 4 + 4) + f'for {rep_symbol[rep_id]} in range ({int(rep)}):\n'
                     cmd += cmd_tmp
                     t1, t2 = '{', '}'
-                    cmd += ' ' * (n_repeat * 4 + 8) + f'print(f"repeat #{t1}{rep_symbol[rep_id]}{t2}")\n'
+                    cmd += ' ' * (n_repeat * 4 + 8) + f'print(f"repeat #{t1}{rep_symbol[rep_id]}{t2}")\n\n'
                     n_repeat += 1
                     rep_id += 1
                 elif 'End repeat' in item:
@@ -3027,8 +3078,8 @@ class App(QWidget):
                 elif 'sleep' in item:
                     sleep_time = float(item[:-1].split('_')[-1])
                     #cmd += f'sleep for {sleep_time} sec ...\n'
-                    cmd += ' ' * (n_repeat * 4 + 4) + f'print("sleep for {sleep_time} sec ...")\n'
-                    cmd += ' ' * (n_repeat * 4 + 4) + f'yield from bps.sleep({sleep_time})\n'
+                    cmd += ' ' * (n_repeat * 4 + 4) + f'print("sleep for {sleep_time} sec ...")\n\n'
+                    cmd += ' ' * (n_repeat * 4 + 4) + f'yield from bps.sleep({sleep_time})\n\n'
                 else:
                     cmd_scan = self.assemble_scan_cmd(item, n_repeat)
                     cmd += cmd_scan + '\n'
@@ -3062,7 +3113,7 @@ class App(QWidget):
                 x, y = scan['pos'][key]['x'], scan['pos'][key]['y']
                 z, r = scan['pos'][key]['z'], scan['pos'][key]['r']
                 cmd_move_pos[key] = ' ' * (
-                            n_repeat * 4 + 4) + f'yield from mv(zps.sx, {x}, zps.sy, {y}, zps.sz, {z}, zps.pi_r, {r})  #{key}'
+                            n_repeat * 4 + 4) + f'yield from mv(zps.sx, {x}, zps.sy, {y}, zps.sz, {z}, zps.pi_r, {r})  #{key}\n'
 
         # get energy
         eng = scan['XEng']
@@ -3097,20 +3148,297 @@ class App(QWidget):
     '''
 
     def vbox_optics(self):
+        lb_empty = QLabel()
+        lb_empty1 = QLabel()
+        lb_empty2 = QLabel()
+        lb_empty2.setFixedWidth(30)
+        lb_empty3 = QLabel()
+        lb_empty3.setFixedWidth(30)
 
-        hbox_optics = self.hbox_optics_1()
-        vbox_record = self.layout_record_eng_calib()
+        #hbox_optics = self.hbox_optics_1()
+        hbox_record = self.layout_record_eng_calib()
+
+        hbox = QHBoxLayout()
+        hbox.addLayout(hbox_record)
+        hbox.addWidget(lb_empty1)
+        #hbox.addLayout(hbox_optics) 
+        hbox.addWidget(lb_empty2)        
+        hbox.addLayout(self.vbox_zp_ccd())  
+        hbox.addWidget(lb_empty3)            
+        hbox.addLayout(self.vbox_filter()) 
+        hbox.addStretch()
+        hbox.setAlignment(QtCore.Qt.AlignTop)
+        
+        self.chk_reset_reading = QCheckBox('Enable reading reset without moving motor (ADVANCED USER ONLY)')
+        self.chk_reset_reading.stateChanged.connect(self.enable_reset_reading)
+        self.chk_reset_reading.setChecked(False) 
 
         vbox = QVBoxLayout()
-        vbox.addLayout(hbox_optics)
-        vbox.addLayout(vbox_record)
+        vbox.addLayout(hbox)
+        vbox.addWidget(lb_empty)
+        vbox.addWidget(self.chk_reset_reading)
+        vbox.addLayout(self.hbox_optics_adv())
+        vbox.addWidget(lb_empty1)
         vbox.addStretch()
-        vbox.setAlignment(QtCore.Qt.AlignTop)
 
         return vbox
 
+    def hbox_optics_adv(self):
+        lb_empty = QLabel()
+        lb_empty1 = QLabel()
+        lb_empty1.setFixedWidth(30)
+        hbox = QHBoxLayout()
+        hbox.addLayout(self.vbox_optics_left())
+        hbox.addWidget(lb_empty)
+        hbox.addLayout(self.vbox_optics_right())
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+        hbox.addStretch()
+        return hbox
+
+    def vbox_optics_left(self):
+        lb_sep1 = QLabel()
+        lb_sep1.setFixedHeight(10)
+        lb_sep1.setFixedWidth(100)
+
+        lb_sep2 = QLabel()
+        lb_sep2.setFixedHeight(10)
+        lb_sep2.setFixedWidth(100)
+
+        lb_sep3 = QLabel()
+        lb_sep3.setFixedHeight(10)
+        lb_sep3.setFixedWidth(100)
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(self.vbox_motor_cond())
+        vbox.addWidget(lb_sep1)
+        vbox.addLayout(self.vbox_motor_aper())
+        vbox.addWidget(lb_sep2)
+        vbox.addLayout(self.vbox_motor_zp())
+        vbox.addStretch()
+
+        return vbox
+
+    def vbox_optics_right(self):
+        lb_empty = QLabel()
+        lb_sep1 = QLabel()
+        lb_sep1.setFixedHeight(10)
+        lb_sep1.setFixedWidth(100)
+
+        lb_sep2 = QLabel()
+        lb_sep2.setFixedHeight(10)
+        lb_sep2.setFixedWidth(100)
+
+        lb_sep3 = QLabel()
+        lb_sep3.setFixedHeight(10)
+        lb_sep3.setFixedWidth(100)
+        
+        self.mot_txmX = Motor_layout(self, 'zps.pi_x', 'TXM X', 'mm')     
+        self.motor_display.append(self.mot_txmX)
+        
+        vbox = QVBoxLayout()
+        vbox.addLayout(self.mot_txmX.layout())
+        vbox.addWidget(lb_sep1)
+
+        #vbox.addLayout(self.vbox_motor_detU)
+        #vbox.addWidget(lb_sep2)
+
+        vbox.addLayout(self.vbox_motor_dcm_th2())
+        vbox.addWidget(lb_sep3)
+        vbox.addLayout(self.vbox_motor_dcm_chi2())
+        vbox.addWidget(lb_empty)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+
+        return vbox
+
+    def vbox_zp_ccd(self):
+        lb_empty = QLabel()
+        lb_empty2 = QLabel()
+        lb_empty2.setFixedHeight(10)
+        lb_title = FixLabel(self.font1, 'Optical Parameter Calculation', 300)
+        hbox = QHBoxLayout()
+        hbox.addLayout(self.vbox_zone_plate_cal_1())
+        hbox.addWidget(self.vbox_zone_plate_cal_2())
+        hbox.addLayout(self.vbox_zone_plate_cal_3())
+        hbox.addWidget(lb_empty)
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+        hbox.addStretch()
+        vbox = QVBoxLayout()
+        vbox.addWidget(lb_title)
+        vbox.addWidget(lb_empty2)
+        vbox.addLayout(hbox)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        return vbox
+
+    def vbox_zone_plate_cal_1(self):
+        lb_zp_diameter = FixLabel(self.font2, 'ZP diameter:', 120)
+        lb_zp_diameter_unit = FixLabel(self.font2, 'um', 40)
+        self.tx_zp_diamter = FixEditor(self.font2, '244', 60 )
+
+        lb_zp_width = FixLabel(self.font2, 'Outer width:', 120)
+        lb_zp_width_unit = FixLabel(self.font2, 'nm', 40)
+        self.tx_zp_width = FixEditor(self.font2, '30', 60)
+
+        lb_txm_mag = FixLabel(self.font2, 'ZP Mag:', 120)
+        lb_txm_mag_unit = FixLabel(self.font2, 'x', 40)
+        self.tx_txm_mag = FixEditor(self.font2, '32.5', 60)
+
+        lb_vlm_mag = FixLabel(self.font2, 'Vis Lens Mag:', 120)
+        lb_vlm_mag_unit = FixLabel(self.font2, 'x', 40)
+        self.tx_vlm_mag = FixEditor(self.font2, '10', 60)
+
+        lb_xray_eng = FixLabel(self.font2, 'X-ray energy:', 120)
+        lb_xray_eng_unit = FixLabel(self.font2, 'keV', 40)
+        self.tx_xray_eng = FixEditor(self.font2, '8.0', 60)
+        
+        self.pb_zp_cal = FixButton(self.font2, 'Calculate', 230 )
+        self.pb_zp_cal.clicked.connect(self.cal_zone_plate_param)
+        
+        hbox_dia = QHBoxLayout()
+        hbox_dia.addWidget(lb_zp_diameter)
+        hbox_dia.addWidget(self.tx_zp_diamter)
+        hbox_dia.addWidget(lb_zp_diameter_unit)
+        hbox_dia.setAlignment(QtCore.Qt.AlignLeft)
+
+        hbox_w = QHBoxLayout()
+        hbox_w.addWidget(lb_zp_width)
+        hbox_w.addWidget(self.tx_zp_width)
+        hbox_w.addWidget(lb_zp_width_unit)
+        hbox_w.setAlignment(QtCore.Qt.AlignLeft)
+
+        hbox_mag = QHBoxLayout()
+        hbox_mag.addWidget(lb_txm_mag)
+        hbox_mag.addWidget(self.tx_txm_mag)
+        hbox_mag.addWidget(lb_txm_mag_unit)
+        hbox_mag.setAlignment(QtCore.Qt.AlignLeft)
+        
+        hbox_vlm_mag = QHBoxLayout()
+        hbox_vlm_mag.addWidget(lb_vlm_mag)
+        hbox_vlm_mag.addWidget(self.tx_vlm_mag)
+        hbox_vlm_mag.addWidget(lb_vlm_mag_unit)
+        hbox_vlm_mag.setAlignment(QtCore.Qt.AlignLeft)
+
+        hbox_eng = QHBoxLayout()
+        hbox_eng.addWidget(lb_xray_eng)
+        hbox_eng.addWidget(self.tx_xray_eng)
+        hbox_eng.addWidget(lb_xray_eng_unit)
+        hbox_eng.setAlignment(QtCore.Qt.AlignLeft)
+
+        vbox_zp = QVBoxLayout()
+        vbox_zp.addLayout(hbox_dia)
+        vbox_zp.addLayout(hbox_w)
+        vbox_zp.addLayout(hbox_mag)
+        vbox_zp.addLayout(hbox_vlm_mag)
+        vbox_zp.addLayout(hbox_eng)
+        vbox_zp.addWidget(self.pb_zp_cal)
+        vbox_zp.setAlignment(QtCore.Qt.AlignTop)
+
+        return vbox_zp
+
+    def vbox_zone_plate_cal_2(self):
+        lb_zp_cal = FixLabel(self.font2, '--->', 60)
+        lb_zp_cal.setAlignment(QtCore.Qt.AlignCenter)
+        return lb_zp_cal
+
+    def vbox_zone_plate_cal_3(self):
+        lb_zp_wl = FixLabel(self.font2, 'Wavelength:', 120)
+        lb_zp_wl_unit = FixLabel(self.font2, 'nm', 40)
+        self.tx_zp_wl = FixEditor(self.font2, '', 80 )
+
+        lb_zp_fl = FixLabel(self.font2, 'Focal length:', 120)
+        lb_zp_fl_unit = FixLabel(self.font2, 'mm', 40)
+        self.tx_zp_fl = FixEditor(self.font2, '', 80)
+
+        lb_zp_na = FixLabel(self.font2, 'NA:', 120)
+        lb_zp_na_unit = FixLabel(self.font2, 'mrad', 40)
+        self.tx_zp_na = FixEditor(self.font2, '', 80)
+
+        lb_zp_dof= FixLabel(self.font2, 'DOF:', 120)
+        lb_zp_dof_unit = FixLabel(self.font2, 'um', 40)
+        self.tx_zp_dof = FixEditor(self.font2, '', 80)
+
+        lb_zp_dis = FixLabel(self.font2, 'ZP position:', 120)
+        stylesheet = 'color: rgb(0, 80, 255)'
+        lb_zp_dis.setStyleSheet(stylesheet)
+        lb_zp_dis_unit = FixLabel(self.font2, 'mm', 40)
+        self.tx_zp_dis = FixEditor(self.font2, '', 80)
+
+        lb_zp_ccd = FixLabel(self.font2, 'CCD posistion:', 120)
+        stylesheet = 'color: rgb(0, 80, 255)'
+        lb_zp_ccd.setStyleSheet(stylesheet)
+        lb_zp_ccd_unit = FixLabel(self.font2, 'mm', 40)
+        self.tx_zp_ccd = FixEditor(self.font2, '', 80)
+
+        lb_pix = FixLabel(self.font1, 'Pix size:', 120)
+        lb_pix_unit = FixLabel(self.font2, 'mm', 40)
+        self.tx_pix = FixEditor(self.font2, '', 80)
+
+        hbox_wl = QHBoxLayout()
+        hbox_wl.addWidget(lb_zp_wl)
+        hbox_wl.addWidget(self.tx_zp_wl)
+        hbox_wl.addWidget(lb_zp_wl_unit)
+        hbox_wl.setAlignment(QtCore.Qt.AlignLeft)
+
+        hbox_fl = QHBoxLayout()
+        hbox_fl.addWidget(lb_zp_fl)
+        hbox_fl.addWidget(self.tx_zp_fl)
+        hbox_fl.addWidget(lb_zp_fl_unit)
+        hbox_fl.setAlignment(QtCore.Qt.AlignLeft)
+
+        hbox_na = QHBoxLayout()
+        hbox_na.addWidget(lb_zp_na)
+        hbox_na.addWidget(self.tx_zp_na)
+        hbox_na.addWidget(lb_zp_na_unit)
+        hbox_na.setAlignment(QtCore.Qt.AlignLeft)
+
+        hbox_dof = QHBoxLayout()
+        hbox_dof.addWidget(lb_zp_dof)
+        hbox_dof.addWidget(self.tx_zp_dof)
+        hbox_dof.addWidget(lb_zp_dof_unit)
+        hbox_dof.setAlignment(QtCore.Qt.AlignLeft)
+        
+        hbox_zp_dis = QHBoxLayout()
+        hbox_zp_dis.addWidget(lb_zp_dis)
+        hbox_zp_dis.addWidget(self.tx_zp_dis)
+        hbox_zp_dis.addWidget(lb_zp_dis_unit)
+        hbox_zp_dis.setAlignment(QtCore.Qt.AlignLeft)
+
+        hbox_ccd_dis = QHBoxLayout()
+        hbox_ccd_dis.addWidget(lb_zp_ccd)
+        hbox_ccd_dis.addWidget(self.tx_zp_ccd)
+        hbox_ccd_dis.addWidget(lb_zp_ccd_unit)
+        hbox_ccd_dis.setAlignment(QtCore.Qt.AlignLeft)
+
+        vbox_zp = QVBoxLayout()
+        vbox_zp.addLayout(hbox_wl)
+        vbox_zp.addLayout(hbox_fl)
+        vbox_zp.addLayout(hbox_na)
+        vbox_zp.addLayout(hbox_dof)
+        vbox_zp.addLayout(hbox_zp_dis)
+        vbox_zp.addLayout(hbox_ccd_dis)
+        vbox_zp.setAlignment(QtCore.Qt.AlignTop)
+
+        return vbox_zp
+
     def hbox_optics_1(self):
-        w = 160
+        # get together
+        lb_empty = QLabel()
+        hbox_1 = QHBoxLayout()
+        #hbox_1.addLayout(self.vbox_optics_box1())
+        #hbox_1.addLayout(self.vbox_optics_box2())
+        #hbox_1.addLayout(self.vbox_optics_box3())
+        #hbox_1.addLayout(self.vbox_optics_box4())
+        #hbox_1.addLayout(self.vbox_optics_box5())
+        #hbox_1.addLayout(self.vbox_optics_box6())
+        #hbox_1.addLayout(self.vbox_optics_box7())
+        
+        hbox_1.addStretch()
+        hbox_1.setAlignment(QtCore.Qt.AlignLeft)
+
+        return hbox_1
+
+    def vbox_optics_box1(self):
+        w = 140
         h = 180
         bkg = 'background-color: rgb(240, 240, 240);'
         h1 = 30
@@ -3147,7 +3475,13 @@ class App(QWidget):
         vbox_1.addWidget(self.lb_op_1)
         vbox_1.addStretch()
         vbox_1.setAlignment(QtCore.Qt.AlignTop)
+        return vbox_1
 
+    def vbox_optics_box2(self):
+        w = 140
+        h = 180
+        h1 = 30
+        bkg = 'background-color: rgb(240, 240, 240);'
         # lens and zp and aper
         lb_2 = QLabel()
         lb_2.setText('txm optics')
@@ -3183,10 +3517,17 @@ class App(QWidget):
         vbox_2.addWidget(self.lb_op_2)
         vbox_2.addStretch()
         vbox_2.setAlignment(QtCore.Qt.AlignTop)
+        return vbox_2
 
+    def vbox_optics_box3(self):
         # ssa and filter
+        w = 140
+        h = 180
+        h1 = 30
+        bkg = 'background-color: rgb(240, 240, 240);'
         lb_3 = QLabel()
-        lb_3.setText('ssa, filter')
+        #lb_3.setText('ssa, filter')
+        lb_3.setText('ssa, ic')
         lb_3.setFont(self.font2)
         lb_3.setFixedWidth(w)
         self.lst_op_3 = QListWidget()
@@ -3200,10 +3541,12 @@ class App(QWidget):
         self.lst_op_3.addItem('ssa.v_ctr')
         self.lst_op_3.addItem('ssa.h_gap')
         self.lst_op_3.addItem('ssa.h_ctr')
-        self.lst_op_3.addItem('filter1')
-        self.lst_op_3.addItem('filter2')
-        self.lst_op_3.addItem('filter3')
-        self.lst_op_3.addItem('filter4')
+        self.lst_op_3.addItem('ic3')
+        self.lst_op_3.addItem('ic4')
+        #self.lst_op_3.addItem('filter1')
+        #self.lst_op_3.addItem('filter2')
+        #self.lst_op_3.addItem('filter3')
+        #self.lst_op_3.addItem('filter4')
         self.lb_op_3 = QLabel()
         self.lb_op_3.setFixedWidth(w)
         self.lb_op_3.setFixedHeight(h1)
@@ -3215,8 +3558,14 @@ class App(QWidget):
         vbox_3.addWidget(self.lb_op_3)
         vbox_3.addStretch()
         vbox_3.setAlignment(QtCore.Qt.AlignTop)
+        return vbox_3
 
+    def vbox_optics_box4(self):
         # CM and TM
+        w = 140
+        h = 180
+        h1 = 30
+        bkg = 'background-color: rgb(240, 240, 240);'
         lb_4 = QLabel()
         lb_4.setText('CM, TM')
         lb_4.setFont(self.font2)
@@ -3249,10 +3598,16 @@ class App(QWidget):
         vbox_4.addWidget(self.lb_op_4)
         vbox_4.addStretch()
         vbox_4.setAlignment(QtCore.Qt.AlignTop)
+        return vbox_4
 
+    def vbox_optics_box5(self):
         #dcm and pbsl
+        w = 140
+        h = 180
+        h1 = 30
+        bkg = 'background-color: rgb(240, 240, 240);'
         lb_5 = QLabel()
-        lb_5.setText('pbsl, dcm')
+        lb_5.setText('pbsl, dcm, loadcell')
         lb_5.setFont(self.font2)
         lb_5.setFixedWidth(w)
         self.lst_op_5 = QListWidget()
@@ -3266,11 +3621,16 @@ class App(QWidget):
         self.lst_op_5.addItem('pbsl.x_ctr')
         self.lst_op_5.addItem('pbsl.y_gap')
         self.lst_op_5.addItem('pbsl.y_ctr')
-        self.lst_op_5.addItem('dcm.eng')
+        #self.lst_op_5.addItem('dcm.eng')
         self.lst_op_5.addItem('dcm.th1')
-        self.lst_op_5.addItem('dcm.th2')
+        #self.lst_op_5.addItem('dcm.th2')
         self.lst_op_5.addItem('dcm.dy2')
-        self.lst_op_5.addItem('dcm.chi2')
+        #self.lst_op_5.addItem('dcm.chi2')
+
+        # newly added loadcell
+        self.lst_op_5.addItem('pzt_tm_loadcell')
+        self.lst_op_5.addItem('pzt_cm_loadcell')
+
         self.lb_op_5 = QLabel()
         self.lb_op_5.setFixedWidth(w)
         self.lb_op_5.setFixedHeight(h1)
@@ -3282,8 +3642,14 @@ class App(QWidget):
         vbox_5.addWidget(self.lb_op_5)
         vbox_5.addStretch()
         vbox_5.setAlignment(QtCore.Qt.AlignTop)
+        return vbox_5
 
+    def vbox_optics_box6(self):
         # pzt
+        w = 140
+        h = 180
+        h1 = 30
+        bkg = 'background-color: rgb(240, 240, 240);'
         lb_6 = QLabel()
         lb_6.setText('pzt')
         lb_6.setFont(self.font2)
@@ -3295,8 +3661,8 @@ class App(QWidget):
         self.lst_op_6.setSelectionMode(QAbstractItemView.SingleSelection)
         self.lst_op_6.itemClicked.connect(lambda: self.show_op_position(6))
 
-        self.lst_op_6.addItem('pzt_dcm_chi2.pos')
-        self.lst_op_6.addItem('pzt_dcm_th2.pos')
+        #self.lst_op_6.addItem('pzt_dcm_chi2.pos')
+        #self.lst_op_6.addItem('pzt_dcm_th2.pos')
         self.lst_op_6.addItem('pzt_tm_loadcell')
         self.lst_op_6.addItem('pzt_cm_loadcell')
         self.lb_op_6 = QLabel()
@@ -3311,8 +3677,14 @@ class App(QWidget):
         vbox_6.addWidget(self.lb_op_6)
         vbox_6.addStretch()
         vbox_6.setAlignment(QtCore.Qt.AlignTop)
+        return vbox_6
 
+    def vbox_optics_box7(self):
         # ic and camera
+        w = 140
+        h = 180
+        h1 = 30
+        bkg = 'background-color: rgb(240, 240, 240);'
         lb_7 = QLabel()
         lb_7.setText('ic, camera')
         lb_7.setFont(self.font2)
@@ -3344,53 +3716,68 @@ class App(QWidget):
         vbox_7.addWidget(self.lb_op_7)
         vbox_7.addStretch()
         vbox_7.setAlignment(QtCore.Qt.AlignTop)
+        return vbox_7
 
-        # get together
-        hbox_1 = QHBoxLayout()
-        hbox_1.addLayout(vbox_1)
-        hbox_1.addLayout(vbox_2)
-        hbox_1.addLayout(vbox_3)
-        hbox_1.addLayout(vbox_4)
-        hbox_1.addLayout(vbox_5)
-        hbox_1.addLayout(vbox_6)
-        hbox_1.addLayout(vbox_7)
-        #hbox_1.addStretch()
-        hbox_1.setAlignment(QtCore.Qt.AlignLeft)
+    def vbox_filter(self):
+        lb_empty = QLabel()
+        lb_title = FixLabel(self.font1, 'SSA Filters')
 
-        return hbox_1
+        lb_sep = QLabel()
+        lb_sep.setFixedHeight(10)
+        self.filt1 = Filter_layout(self, 'filter1', 'Filter 1 (1-Al)')
+        self.filt2 = Filter_layout(self, 'filter2', 'Filter 2 (2-Al)')
+        self.filt3 = Filter_layout(self, 'filter3', 'Filter 3 (3-Al)')
+        self.filt4 = Filter_layout(self, 'filter4', 'Filter 4 (1-Cu)')
+        vbox = QVBoxLayout()
+        vbox.addWidget(lb_title)
+        vbox.addWidget(lb_sep)
+        vbox.addLayout(self.filt1.layout())
+        vbox.addLayout(self.filt2.layout())
+        vbox.addLayout(self.filt3.layout())
+        vbox.addLayout(self.filt4.layout())
+        vbox.addWidget(lb_empty)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+
+        #self.motor_display.append(self.filt1)
+        #self.motor_display.append(self.filt2)
+        #self.motor_display.append(self.filt3)
+        #self.motor_display.append(self.filt4)
+        return vbox
 
     def layout_record_eng_calib(self):
         lb_empty = QLabel()
         lb_empty.setFixedHeight(10)
 
+        lb_empty2 = QLabel()
+        lb_empty2.setFixedWidth(5)
+
+        lb_empty3 = QLabel()
+        lb_empty3.setFixedWidth(5)
+        
+        lb_empty4 = QLabel()
+        lb_empty4.setFixedWidth(5)
+
+        lb_sep1 = FixLabel(self.font2, '', 0, 10)
+        lb_sep2 = FixLabel(self.font2, '', 0, 10)
+        lb_sep3 = FixLabel(self.font2, '', 0, 10)
+
         lb_rec_eng_calib = QLabel()
         lb_rec_eng_calib.setFont(self.font1)
         lb_rec_eng_calib.setText('Record energy calibration position')
 
-        self.pb_rec_eng_calib = QPushButton('record')
-        self.pb_rec_eng_calib.setFont(self.font2)
-        self.pb_rec_eng_calib.setFixedWidth(120)
+        self.pb_rec_eng_calib = FixButton(self.font2, 'record', 100)
         self.pb_rec_eng_calib.clicked.connect(self.record_eng_calib)
 
-        self.pb_rm_eng_calib = QPushButton('remove')
-        self.pb_rm_eng_calib.setFont(self.font2)
-        self.pb_rm_eng_calib.setFixedWidth(120)
+        self.pb_rm_eng_calib = FixButton(self.font2, 'remove', 100)
         self.pb_rm_eng_calib.clicked.connect(self.remove_eng_calib)
 
-        self.pb_rm_all_eng_calib = QPushButton('remove all')
-        self.pb_rm_all_eng_calib.setFont(self.font2)
-        self.pb_rm_all_eng_calib.setFixedWidth(120)
+        self.pb_rm_all_eng_calib = FixButton(self.font2, 'remove all', 100)
         self.pb_rm_all_eng_calib.clicked.connect(self.remove_eng_calib_all)
 
-        lb_rec_eng_id = QLabel()
-        lb_rec_eng_id.setFont(self.font2)
-        lb_rec_eng_id.setFixedWidth(70)
-        lb_rec_eng_id.setText('Pos ID:')
-        #lb_rec_eng_id.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        lb_rec_eng_id = FixLabel(self.font2, 'Pos ID:', 60)
 
-        self.tx_rec_eng_id = QLineEdit('1')
-        self.tx_rec_eng_id.setFont(self.font2)
-        self.tx_rec_eng_id.setFixedWidth(40)
+        self.tx_rec_eng_id = FixEditor(self.font2, '1', 30)
 
         hbox = QHBoxLayout()
         hbox.addWidget(lb_rec_eng_id)
@@ -3404,14 +3791,10 @@ class App(QWidget):
         vbox_pb.addWidget(self.pb_rm_eng_calib)
         vbox_pb.addWidget(self.pb_rm_all_eng_calib)
 
-
-        lb_rec_eng_recorded = QLabel()
-        lb_rec_eng_recorded.setFont(self.font2)
-        lb_rec_eng_recorded.setFixedWidth(160)
-        lb_rec_eng_recorded.setText('Recorded')
+        lb_rec_eng_recorded = FixLabel(self.font2, 'Recorded', 140)
 
         self.lst_eng_calib = QListWidget()
-        self.lst_eng_calib.setFixedWidth(160)
+        self.lst_eng_calib.setFixedWidth(140)
         self.lst_eng_calib.setFixedHeight(160)
         self.lst_eng_calib.setFont(self.font2)
         self.lst_eng_calib.itemClicked.connect(self.display_calib_eng_detail)
@@ -3421,13 +3804,10 @@ class App(QWidget):
         vbox_recorded.addWidget(self.lst_eng_calib)
         vbox_recorded.setAlignment(QtCore.Qt.AlignTop)
 
-        lb_rec_eng_detail = QLabel()
-        lb_rec_eng_detail.setFont(self.font2)
-        lb_rec_eng_detail.setFixedWidth(160)
-        lb_rec_eng_detail.setText('Motor pos')
+        lb_rec_eng_detail = FixLabel(self.font2, 'Motor pos', 160)
 
-        self.tx_eng_calib = QPlainTextEdit()
-        self.tx_eng_calib.setFixedWidth(200)
+        self.tx_eng_calib = QPlainTextEdit()        
+        self.tx_eng_calib.setFixedWidth(180)
         self.tx_eng_calib.setFixedHeight(160)
         self.tx_eng_calib.setFont(self.font2)
         self.tx_eng_calib.setReadOnly(True)
@@ -3437,29 +3817,177 @@ class App(QWidget):
         vbox_record_detail.addWidget(self.tx_eng_calib)
         vbox_record_detail.setAlignment(QtCore.Qt.AlignTop)
 
-        lb_empty2 = QLabel()
+        lb_zp_mag = FixLabel(self.font2, 'ZP Mag:', 80)
+        self.lb_zp_mag = FixLabel(self.font2, '', 80)
+        
+        lb_current_mag = FixLabel(self.font2, 'TXM Mag:', 80)
+        self.lb_current_mag = FixLabel(self.font2, '', 80)
+
+        lb_pix_size = FixLabel(self.font2, 'Pixel:', 80)
+        self.lb_pix_size = FixLabel(self.font2, '', 80)
+        
+        hbox_zp_mag = QHBoxLayout()
+        hbox_zp_mag.addWidget(lb_zp_mag)
+        hbox_zp_mag.addWidget(self.lb_zp_mag)
+        hbox_zp_mag.setAlignment(QtCore.Qt.AlignTop)
+
+        hbox_txm_mag = QHBoxLayout()
+        hbox_txm_mag.addWidget(lb_current_mag)
+        hbox_txm_mag.addWidget(self.lb_current_mag)
+        hbox_txm_mag.setAlignment(QtCore.Qt.AlignTop)
+        
+        hbox_txm_pix = QHBoxLayout()
+        hbox_txm_pix.addWidget(lb_pix_size)
+        hbox_txm_pix.addWidget(self.lb_pix_size)
+        hbox_txm_pix.setAlignment(QtCore.Qt.AlignTop)
+        
+        vbox_pix_mag = QVBoxLayout()
+        vbox_pix_mag.addLayout(hbox_zp_mag)
+        vbox_pix_mag.addWidget(lb_sep1)
+        vbox_pix_mag.addLayout(hbox_txm_mag)
+        vbox_pix_mag.addWidget(lb_sep1)
+        vbox_pix_mag.addLayout(hbox_txm_pix)
+        vbox_pix_mag.setAlignment(QtCore.Qt.AlignCenter)
 
         hbox2 = QHBoxLayout()
         hbox2.addLayout(vbox_pb)
+        hbox2.addWidget(lb_empty2)
         hbox2.addLayout(vbox_recorded)
+        hbox2.addWidget(lb_empty3)
         hbox2.addLayout(vbox_record_detail)
+        hbox2.addWidget(lb_empty4)
+        hbox2.addLayout(vbox_pix_mag)
         hbox2.addStretch()
         hbox2.setAlignment(QtCore.Qt.AlignLeft)
 
         vbox = QVBoxLayout()
         vbox.addWidget(lb_rec_eng_calib)
+        vbox.addWidget(lb_empty)
         vbox.addLayout(hbox2)
+        #vbox.addWidget(lb_empty2)
         vbox.addStretch()
         vbox.setAlignment(QtCore.Qt.AlignTop)
-
+        '''
         hbox_all = QHBoxLayout()
         hbox_all.addLayout(vbox)
         hbox_all.addWidget(lb_empty2)
         hbox_all.addStretch()
         hbox_all.setAlignment(QtCore.Qt.AlignLeft)
         return hbox_all
+        '''
+        return vbox
 
+    def vbox_motor_cond(self):
+        self.mot_cond_x = Motor_layout(self, 'clens.x', 'Cond.x', 'um')
+        self.mot_cond_y1 = Motor_layout(self, 'clens.y1', 'Cond.y1', 'um')
+        self.mot_cond_y2 = Motor_layout(self, 'clens.y2', 'Cond.y2', 'um')
+        self.mot_cond_z1 = Motor_layout(self, 'clens.z1', 'Cond.z1', 'um')
+        self.mot_cond_z2 = Motor_layout(self, 'clens.z2', 'Cond.z2', 'um')
+        self.mot_cond_pit = Motor_layout(self, 'clens.p', 'Cond.pit', 'um')
 
+        vbox = QVBoxLayout()
+        vbox.addLayout(self.mot_cond_x.layout())
+        vbox.addLayout(self.mot_cond_y1.layout())
+        vbox.addLayout(self.mot_cond_y2.layout())
+        vbox.addLayout(self.mot_cond_z1.layout())
+        vbox.addLayout(self.mot_cond_z2.layout())
+        vbox.addLayout(self.mot_cond_pit.layout())
+        vbox.addStretch()
+        vbox.setAlignment(QtCore.Qt.AlignLeft)
+
+        self.motor_display.append(self.mot_cond_x)
+        self.motor_display.append(self.mot_cond_y1)
+        self.motor_display.append(self.mot_cond_y2)
+        self.motor_display.append(self.mot_cond_z1)
+        self.motor_display.append(self.mot_cond_z2)
+        self.motor_display.append(self.mot_cond_pit)
+
+        return vbox
+  
+    def vbox_motor_aper(self):                
+        self.mot_aper_x = Motor_layout(self, 'aper.x', 'Aper.x', 'um')
+        self.mot_aper_y = Motor_layout(self, 'aper.y', 'Aper.y', 'um')
+        self.mot_aper_z = Motor_layout(self, 'aper.z', 'Aper.z', 'mm')
+        vbox = QVBoxLayout()
+        vbox.addLayout(self.mot_aper_x.layout())
+        vbox.addLayout(self.mot_aper_y.layout())
+        vbox.addLayout(self.mot_aper_z.layout())
+        vbox.addStretch()
+        vbox.setAlignment(QtCore.Qt.AlignLeft)
+
+        self.motor_display.append(self.mot_aper_x)
+        self.motor_display.append(self.mot_aper_y)
+        self.motor_display.append(self.mot_aper_z)
+        return vbox
+
+    def vbox_motor_zp(self):
+        self.mot_zp_x = Motor_layout(self, 'zp.x', 'zp.x', 'um')
+        self.mot_zp_y = Motor_layout(self, 'zp.y', 'zp.y', 'um')
+        self.mot_zp_z = Motor_layout(self, 'zp.z', 'zp.z', 'mm')
+        
+        #self.mot_zp_x.button_reset_reading.clicked.connect(lambda: self.reset_reading_to(self.mot_zp_x, 'zp.x'))
+        #self.mot_zp_y.button_reset_reading.clicked.connect(lambda: self.reset_reading_to(self.mot_zp_y, 'zp.y'))
+        #self.mot_zp_z.button_reset_reading.clicked.connect(lambda: self.reset_reading_to(self.mot_zp_z, 'zp.z'))
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(self.mot_zp_x.layout())
+        vbox.addLayout(self.mot_zp_y.layout())
+        vbox.addLayout(self.mot_zp_z.layout())
+        vbox.addStretch()
+        vbox.setAlignment(QtCore.Qt.AlignLeft)
+
+        self.motor_display.append(self.mot_zp_x)
+        self.motor_display.append(self.mot_zp_y)
+        self.motor_display.append(self.mot_zp_z)
+        return vbox
+
+    def vbox_motor_detU(self):
+        self.mot_detU_x = Motor_layout(self, 'DetU.x', 'DetU.x','um')
+        self.mot_detU_y = Motor_layout(self, 'DetU.y', 'DetU.x','um')
+        self.mot_detU_z = Motor_layout(self, 'DetU.z', 'DetU.x','um')
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(self.mot_detU_x.layout())
+        vbox.addLayout(self.mot_detU_y.layout())
+        vbox.addLayout(self.mot_detU_z.layout())
+        vbox.addStretch()
+        vbox.setAlignment(QtCore.Qt.AlignLeft)
+        return vbox
+
+    def vbox_motor_dcm_th2(self):
+        self.mot_dcm_th2 = DCM_th2_chi2(self, 'dcm_th2', 'dcm_th2', 'deg')
+        self.mot_dcm_th2_pzt = PZT_th2_chi2(self, 'pzt_dcm_th2', 'pzt_th2', 'um')
+        self.motor_display.append(self.mot_dcm_th2)
+        self.motor_display.append(self.mot_dcm_th2_pzt)
+        vbox = QVBoxLayout()
+        vbox.addLayout(self.mot_dcm_th2.layout())
+        vbox.addLayout(self.mot_dcm_th2_pzt.layout()) 
+        vbox.addStretch()
+        vbox.setAlignment(QtCore.Qt.AlignLeft)
+        return vbox
+
+    def vbox_motor_dcm_chi2(self):
+        self.mot_dcm_chi2 = DCM_th2_chi2(self, 'dcm_chi2', 'dcm_chi2', 'deg')
+        self.mot_dcm_chi2_pzt = PZT_th2_chi2(self, 'pzt_dcm_chi2', 'pzt_chi2', 'um')
+        self.motor_display.append(self.mot_dcm_chi2)
+        self.motor_display.append(self.mot_dcm_chi2_pzt)
+        vbox = QVBoxLayout()
+        vbox.addLayout(self.mot_dcm_chi2.layout())
+        vbox.addLayout(self.mot_dcm_chi2_pzt.layout()) 
+        vbox.addStretch()
+        vbox.setAlignment(QtCore.Qt.AlignLeft)
+        return vbox
+    
+    def enable_reset_reading(self):
+        for mot in self.motor_display:
+            if hasattr(mot, 'button_reset_reading'):
+                if self.chk_reset_reading.isChecked():
+                    mot.button_reset_reading.setEnabled(True)
+                    mot.editor_reset_reading.setEnabled(True)
+                else:
+                    mot.button_reset_reading.setEnabled(False)
+                    mot.editor_reset_reading.setEnabled(False)
+    
     def record_eng_calib(self):
         global CALIBER
         try:
@@ -3469,6 +3997,35 @@ class App(QWidget):
         except Exception as err:
             print(err)
 
+    def cal_zone_plate_param(self):
+        h = 6.6261e-34
+        c = 3e8
+        ec = 1.602e-19
+        try:
+            eng = float(self.tx_xray_eng.text())
+            zp_width = float(self.tx_zp_width.text())
+            zp_dia = float(self.tx_zp_diamter.text())
+            zp_mag = float(self.tx_txm_mag.text())
+            vlm_mag = float(self.tx_vlm_mag.text())
+            mag = zp_mag * vlm_mag
+
+            wave_length = h * c / (ec * eng * 1000) * 1e9  # nm
+            focal_length = zp_width * zp_dia / (wave_length) / 1000  # mm
+            NA = wave_length / (2 * zp_width)
+            DOF = wave_length / NA**2 / 1000  # um
+
+            zp_pos = focal_length * (zp_mag + 1) / zp_mag
+            ccd_pos = zp_pos * (zp_mag + 1)
+
+            self.tx_zp_wl.setText(f'{wave_length:4.3f}')
+            self.tx_zp_fl.setText(f'{focal_length:4.3f}')
+            self.tx_zp_na.setText(f'{NA:4.3f}')
+            self.tx_zp_dof.setText(f'{DOF:4.3f}')
+            self.tx_zp_dis.setText(f'{zp_pos:4.4f}')
+            self.tx_zp_ccd.setText(f'{ccd_pos:4.2f}')
+        except Exception as err:
+            print(err)
+            print('something wrong, check inputs')
 
     def remove_eng_calib(self):
         item = self.lst_eng_calib.selectedItems()
@@ -3488,7 +4045,6 @@ class App(QWidget):
             remove_caliber_pos(eng_id)
         self.display_calib_eng_only()
 
-
     def get_caliber_eng(self):
         calib_eng_list = []
         calib_eng_id = []
@@ -3497,7 +4053,6 @@ class App(QWidget):
                 calib_eng_id.append(int(k.split('_')[1][3:]))
                 calib_eng_list.append(CALIBER[k])
         return calib_eng_id, calib_eng_list
-
 
     def display_calib_eng_only(self):
         read_calib_file_new()
@@ -3508,23 +4063,19 @@ class App(QWidget):
             calib_eng = calib_eng_list[i]
             txt = f'pos{eng_id}_{calib_eng:2.4f} keV'
             self.lst_eng_calib.addItem(txt)
-        '''    
-        for k in CALIBER.keys():
-            if 'XEng' in k:
-                eng_id = int(k.split('_')[1][3:])
-                calib_eng = CALIBER[k]
-                txt = f'pos{eng_id}_{calib_eng:2.4f} keV'
-                self.lst_eng_calib.addItem(txt)
-        '''
+            
         # update label information
         self.lst_eng_calib.sortItems()
         eng_list_sort = np.sort(calib_eng_list)
         eng_lb = '(calib. at: '
         for eng in eng_list_sort:
-            eng_lb += f'{eng:2.1f}, '
+            eng_lb += f'{eng:2.1f},  '
         eng_lb += 'keV)'
-        self.lb_note.setText(eng_lb)
-
+        #self.lb_note.setText(eng_lb)
+        self.mot_sample_e.label_eng_calib.setText(eng_lb)
+        self.lb_current_mag.setText(f'{GLOBAL_MAG:3.2f}')
+        self.lb_zp_mag.setText(f'{GLOBAL_MAG/GLOBAL_VLM_MAG:3.2f}')
+        self.lb_pix_size.setText(f'{6500./GLOBAL_MAG:2.2f} nm')
 
     def display_calib_eng_detail(self):
         item = self.lst_eng_calib.selectedItems()
@@ -3540,10 +4091,6 @@ class App(QWidget):
                 txt += f'{k1:<10} = {CALIBER[k]:5.4f}\n'
         #print(f'pos:\n{txt}')
         self.tx_eng_calib.setPlainText(txt)
-
-
-
-
 
     def show_op_position(self, n):
         motor = motor_list(n)
@@ -3564,7 +4111,10 @@ class App(QWidget):
             if n == 3:
                 item = self.lst_op_3.selectedItems()
                 mname = item[0].text()
-                if 'filter' in mname:
+                if 'ic' in mname:
+                    val = motor[mname].value
+                    self.lb_op_3.setText(f'{val:5.6e}')
+                elif 'filter' in mname:
                     val = motor[mname].get()
                     if val == 0:
                         val = 'Out'
@@ -3582,7 +4132,10 @@ class App(QWidget):
             if n == 5:
                 item = self.lst_op_5.selectedItems()
                 mname = item[0].text()
-                val = motor[mname].position
+                try:
+                    val = motor[mname].position
+                except:
+                    val = motor[mname].value
                 self.lb_op_5.setText(f'{val:5.6f}')
             if n == 6:
                 item = self.lst_op_6.selectedItems()
@@ -3601,7 +4154,6 @@ class App(QWidget):
             QApplication.processEvents()         
         except Exception as err:
             print(err)
-
 
 def merge_dict(dict1, dict2):
     res = {**dict1, **dict2}
@@ -3636,7 +4188,6 @@ def prepare_scan_list(fname_read, fname_write='scan_list_test.py'):
     with open(fname_write, 'w') as f:
         f.write(f'\n'.join(file_lines))
 
-
 def convert_fun_dict(fun_name):
     #single_fun = inspect.getfullargspec(eval(fun_name))
     signature = inspect.signature(eval(fun_name))
@@ -3665,7 +4216,6 @@ def convert_fun_dict(fun_name):
     lines.append(space4 + '}')
     return lines
 
-
 def convert_fpath_to_string(file_lines):
     lines_copy = file_lines.copy()
     idx = []
@@ -3678,7 +4228,6 @@ def convert_fpath_to_string(file_lines):
         arg_val = l[len(arg_name)+1:].strip().replace(',', '')
         lines_copy[i] = arg_name + ': ' + '"' + arg_val + '",'
     return lines_copy
-
 
 def convert_epics_to_string(file_lines):
     lines_copy = file_lines.copy()
@@ -3707,13 +4256,3 @@ def run_main():
 
 if __name__ == '__main__':
     run_main()
-    '''
-    t = threading.Thread(target=run_main)
-    t.daemon = True
-    t.start()
-    
-    app = QApplication(sys.argv)
-    txm = App()
-    txm.show()
-    sys.exit(app.exec_())
-    '''

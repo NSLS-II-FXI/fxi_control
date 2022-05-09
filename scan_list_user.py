@@ -182,6 +182,95 @@ def fxi_load_scan_list_user():
     }
 
 
+    txm_multi_edge_xanes = {
+        'elements': ['Ni_wl'], 
+        'scan_type': '3D', 
+        'filters': {'Ni_filters': [1, 2, 3]}, 
+        'exposure_time': {'Ni_exp': 0.05}, 
+        'rel_rot_ang': 185, 
+        'rs': 1, 
+        'in_pos_list': [[None, None, None, None]], 
+        'out_pos': [None, None, None, None], 
+        'chunk_size': 5, 
+        'relative_move_flag': 0, 
+        'simu': False, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
+    txm_multi_edge_xanes2 = {
+        'elements': ['Ni_wl'], 
+        'scan_type': '3D', 
+        'filters': {'Ni_filters': [1, 2, 3]}, 
+        'exposure_time': {'Ni_exp': 0.05}, 
+        'rel_rot_ang': 185, 
+        'rs': 1, 
+        'in_pos_list': [[None, None, None, None]], 
+        'out_pos': [None, None, None, None], 
+        'relative_move_flag': 0, 
+        'bulk': False, 
+        'bulk_intgr': 10, 
+        'simu': False, 
+        'sleep': 0, 
+        'repeat': None, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
+    txm_multi_pos_2D_and_3D_xanes = {
+        'elements': ['Ni_wl'], 
+        'filters': {'Ni_filters': [1, 2, 3]}, 
+        'sam_in_pos_list_2D': {'Ni_2D_in_pos_list': [[0, 0, 0, 0]]}, 
+        'sam_out_pos_list_2D': {'Ni_2D_out_pos_list': [[0, 0, 0, 0]]}, 
+        'sam_in_pos_list_3D': {'Ni_3D_in_pos_list': [[0, 0, 0, 0]]}, 
+        'sam_out_pos_list_3D': {'Ni_3D_out_pos_list': [[0, 0, 0, 0]]}, 
+        'exposure_time_2D': {'Ni_2D_exp': 0.05}, 
+        'exposure_time_3D': {'Ni_3D_exp': 0.05}, 
+        'rel_rot_ang': 185, 
+        'rs': 1, 
+        'sleep_time': 0, 
+        'repeat_num': 1, 
+        'relative_move_flag': 0, 
+        'simu': False, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
+    txm_multi_pos_2D_xanes_and_3D_tomo = {
+        'elements': ['Ni'], 
+        'sam_in_pos_list_2D': [[[0, 0, 0, 0]]], 
+        'sam_out_pos_list_2D': [[[0, 0, 0, 0]]], 
+        'sam_in_pos_list_3D': [[[0, 0, 0, 0]]], 
+        'sam_out_pos_list_3D': [[[0, 0, 0, 0]]], 
+        'exposure_time_2D': [0.05], 
+        'exposure_time_3D': [0.05], 
+        'rel_rot_ang': 0, 
+        'rs': 1, 
+        'eng_3D': [10, 60], 
+        'relative_move_flag': 0, 
+        'simu': False, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
+    txm_multi_pos_3D_xanes = {
+        'eng_list': [], 
+        'x_list': [0], 
+        'y_list': [0], 
+        'z_list': [0], 
+        'r_list': [0], 
+        'exposure_time': 0.05, 
+        'rel_rot_ang': 182, 
+        'rs': 2, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
     txm_qingchao_scan = {
         'eng_list': [], 
         'x_list1': None, 
@@ -298,6 +387,14 @@ def fxi_load_scan_list_user():
     }
 
 
+    txm_user_xanes = {
+        'out_x': None, 
+        'out_y': None, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
     txm_xxanes_scan = {
         'eng_list': [], 
         'delay_time': 0.5, 
@@ -352,6 +449,11 @@ def fxi_load_scan_list_user():
     scan_list["txm_ming_scan3"] = txm_ming_scan3
     scan_list["txm_mosaic_fly_scan"] = txm_mosaic_fly_scan
     scan_list["txm_mosaic_fly_scan_xh"] = txm_mosaic_fly_scan_xh
+    scan_list["txm_multi_edge_xanes"] = txm_multi_edge_xanes
+    scan_list["txm_multi_edge_xanes2"] = txm_multi_edge_xanes2
+    scan_list["txm_multi_pos_2D_and_3D_xanes"] = txm_multi_pos_2D_and_3D_xanes
+    scan_list["txm_multi_pos_2D_xanes_and_3D_tomo"] = txm_multi_pos_2D_xanes_and_3D_tomo
+    scan_list["txm_multi_pos_3D_xanes"] = txm_multi_pos_3D_xanes
     scan_list["txm_qingchao_scan"] = txm_qingchao_scan
     scan_list["txm_scan_change_expo_time"] = txm_scan_change_expo_time
     scan_list["txm_tmp_scan"] = txm_tmp_scan
@@ -359,6 +461,7 @@ def fxi_load_scan_list_user():
     scan_list["txm_user_fly_scan"] = txm_user_fly_scan
     scan_list["txm_user_multiple_fly_scans"] = txm_user_multiple_fly_scans
     scan_list["txm_user_scan"] = txm_user_scan
+    scan_list["txm_user_xanes"] = txm_user_xanes
     scan_list["txm_xxanes_scan"] = txm_xxanes_scan
     scan_list["txm_xxanes_scan2"] = txm_xxanes_scan2
     scan_list["txm_zps_motor_scan_with_Andor"] = txm_zps_motor_scan_with_Andor
