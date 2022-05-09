@@ -1,14 +1,14 @@
 def fxi_load_scan_list_other():
     scan_list = {}
     txm_cond_scan = {
-        'detectors': [None], 
+        'detectors': 'detA1',
         'introduction': ''' Description:
  '''
     }
 
 
     txm_knife_edge_scan_for_condensor = {
-        'det': [None], 
+        'det': 'detA1',
         'mot1': 'zps_sz',
         'mot1_start': -1000, 
         'mot1_end': 1000, 

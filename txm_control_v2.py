@@ -1721,35 +1721,46 @@ class App(QWidget):
         self.lst_scan.itemClicked.connect(self.show_scan_example)
         self.lst_scan.setSelectionMode(QAbstractItemView.SingleSelection)
 
-        self.pb_scan_list1 = QPushButton('Common')
-        self.pb_scan_list1.setFixedWidth(100)
-        self.pb_scan_list1.setFont(self.font2)
+        self.pb_scan_list1 = FixButton(self.font2, 'Common', 100)
+        #self.pb_scan_list1 = QPushButton('Common')
+        #self.pb_scan_list1.setFixedWidth(100)
+        #self.pb_scan_list1.setFont(self.font2)
         self.pb_scan_list1.clicked.connect(lambda: self.load_scan_type_list(1))
 
-        self.pb_scan_list2 = QPushButton('Other scan')
-        self.pb_scan_list2.setFixedWidth(100)
-        self.pb_scan_list2.setFont(self.font2)
+        self.pb_scan_list2 = FixButton(self.font2, 'Other scan', 100)
+        #self.pb_scan_list2 = QPushButton('Other scan')
+        #self.pb_scan_list2.setFixedWidth(100)
+        #self.pb_scan_list2.setFont(self.font2)
         self.pb_scan_list2.clicked.connect(lambda: self.load_scan_type_list(2))
 
-        self.pb_scan_list3 = QPushButton('User scan')
-        self.pb_scan_list3.setFixedWidth(100)
-        self.pb_scan_list3.setFont(self.font2)
+        self.pb_scan_list3 = FixButton(self.font2, 'User scan', 100)
+        #self.pb_scan_list3 = QPushButton('User scan')
+        #self.pb_scan_list3.setFixedWidth(100)
+        #self.pb_scan_list3.setFont(self.font2)
         self.pb_scan_list3.clicked.connect(lambda: self.load_scan_type_list(3))
 
-        self.pb_scan_list1_update = QPushButton('U')
-        self.pb_scan_list1_update.setFixedWidth(30)
-        self.pb_scan_list1_update.setFont(self.font2)
+        self.pb_scan_list4 = FixButton(self.font2, 'Load .py file ...', 135)
+        self.pb_scan_list4.clicked.connect(lambda: self.update_scan_type_list(4))
+
+        self.pb_scan_list1_update = FixButton(self.font2, 'U', 30)
+        #self.pb_scan_list1_update = QPushButton('U')
+        #self.pb_scan_list1_update.setFixedWidth(30)
+        #self.pb_scan_list1_update.setFont(self.font2)
         self.pb_scan_list1_update.clicked.connect(lambda: self.update_scan_type_list(1))
 
-        self.pb_scan_list2_update = QPushButton('U')
-        self.pb_scan_list2_update.setFixedWidth(30)
-        self.pb_scan_list2_update.setFont(self.font2)
+        self.pb_scan_list2_update = FixButton(self.font2, 'U', 30)
+        #self.pb_scan_list2_update = QPushButton('U')
+        #self.pb_scan_list2_update.setFixedWidth(30)
+        #self.pb_scan_list2_update.setFont(self.font2)
         self.pb_scan_list2_update.clicked.connect(lambda: self.update_scan_type_list(2))
 
-        self.pb_scan_list3_update = QPushButton('U')
-        self.pb_scan_list3_update.setFixedWidth(30)
-        self.pb_scan_list3_update.setFont(self.font2)
+        self.pb_scan_list3_update = FixButton(self.font2, 'U', 30)
+        #self.pb_scan_list3_update = QPushButton('U')
+        #self.pb_scan_list3_update.setFixedWidth(30)
+        #self.pb_scan_list3_update.setFont(self.font2)
         self.pb_scan_list3_update.clicked.connect(lambda: self.update_scan_type_list(3))
+
+        
 
         hbox_scan_list1 = QHBoxLayout()
         hbox_scan_list1.addWidget(self.pb_scan_list1)
@@ -1770,6 +1781,7 @@ class App(QWidget):
         vbox_load_scan.addLayout(hbox_scan_list1)
         vbox_load_scan.addLayout(hbox_scan_list2)
         vbox_load_scan.addLayout(hbox_scan_list3)
+        vbox_load_scan.addWidget(self.pb_scan_list4)
         vbox_load_scan.setAlignment(QtCore.Qt.AlignTop)
 
         hbox = QHBoxLayout()
@@ -2859,8 +2871,9 @@ class App(QWidget):
                 print(msg)
                 self.tx_scan_msg.setPlainText(msg)
 
-    def load_scan_type_list(self, scan_type=1):
+    def load_scan_type_list(self, scan_type=1, fpath_scan_list=''):
         global scan_list
+        msg = ''
         try:
             if scan_type == 1: # commonly used scan
                 fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_common.py'
@@ -2881,21 +2894,25 @@ class App(QWidget):
                 tmp_scan_list2 = fxi_load_scan_list_other()
                 tmp_scan_list = merge_dict(tmp_scan_list1, tmp_scan_list2)
                 #tmp_scan_list = fxi_load_scan_list_other()
+            
             if scan_type == 3: # customized scans, e.g., temporary created 
                 fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_user.py'
                 msg = f'load user scan in: 98-user_scan.py'
                 #get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
                 tmp_scan_list = fxi_load_scan_list_user()
-                
-            scan_list = merge_dict(scan_list, tmp_scan_list)
             
+            if scan_type == 4:
+                get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
+                source = open(fpath_scan_list).read()
+                fun_name = [f.name for f in ast.parse(source).body if isinstance(f, ast.FunctionDef)]
+                tmp_scan_list = eval(fun_name[0] + '()')   
+                msg = f'load custom scan in: {fpath_scan_list}'
+            scan_list = merge_dict(scan_list, tmp_scan_list)            
             self.lst_scan.clear()
             #QApplication.processEvents() 
             for k in tmp_scan_list.keys():
                 name = ' '.join(t for t in k.split('_')[1:])
                 self.lst_scan.addItem(name)
-                #print(name)
-            #QApplication.processEvents()  
         except Exception as err:
             msg = str(err) + '\n'
         finally:
@@ -2922,6 +2939,19 @@ class App(QWidget):
             fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_user.py'
             prepare_scan_list(fname_read, fname_write)  
             self.load_scan_type_list(3)
+
+        if scan_type == 4: # open custom python files
+            options = QFileDialog.Option()
+            options |= QFileDialog.DontUseNativeDialog
+            file_type = 'python files (*.py)'
+            fn, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "", file_type, options=options)
+            if fn:
+                fname_read = fn
+                get_ipython().run_line_magic("run", f"-i {fname_read}")
+                fname_write = 'custom_converted_scan_list.py'
+                prepare_scan_list(fname_read, fname_write) 
+                self.load_scan_type_list(4, fname_write)
+
         
     def record_scan(self):
         # need to 'check scan' first
@@ -4168,7 +4198,8 @@ def prepare_scan_list(fname_read, fname_write='scan_list_test.py'):
     space4 = ' ' * 4
     file_lines = []
     fname_write_short = fname_write.split('/')[-1]
-    file_lines.append(f'def fxi_load_{fname_write_short.split(".")[0]}():')
+    func_name = f'fxi_load_{fname_write_short.split(".")[0]}'
+    file_lines.append(f'def {func_name}():')
     file_lines.append(space4 + 'scan_list = {}')
     
     for i in range(len(fun_scan)):
@@ -4185,6 +4216,7 @@ def prepare_scan_list(fname_read, fname_write='scan_list_test.py'):
     file_lines.append(space4 + 'return scan_list')
     file_lines = convert_epics_to_string(file_lines)
     file_lines = convert_fpath_to_string(file_lines)
+    file_lines = convert_initial_digit_to_string(file_lines)
     with open(fname_write, 'w') as f:
         f.write(f'\n'.join(file_lines))
 
@@ -4229,11 +4261,27 @@ def convert_fpath_to_string(file_lines):
         lines_copy[i] = arg_name + ': ' + '"' + arg_val + '",'
     return lines_copy
 
+def convert_initial_digit_to_string(file_lines):
+    lines_copy = file_lines.copy()
+    idx = []
+    for i, l in enumerate(file_lines):
+        arg_name = l.split(':')[0]
+        arg_val = l.split(':')[-1].strip()
+        try:
+            tmp = eval(arg_val)
+        except:
+            try:
+                if arg_val[0].isdigit():
+                    lines_copy[i] = arg_name +  '"' + arg_val + '",'
+            except:
+                pass
+    return lines_copy
+
 def convert_epics_to_string(file_lines):
     lines_copy = file_lines.copy()
     idx = []
     for i, l in enumerate(file_lines):
-        if 'Epics' in l:
+        if 'Epics' in l or 'prefix' in l:
             idx.append(i)
 
     for i in idx:

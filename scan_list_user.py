@@ -184,7 +184,7 @@ def fxi_load_scan_list_user():
 
     txm_multi_edge_xanes = {
         'elements': ['Ni_wl'], 
-        'scan_type': '3D', 
+        'scan_type': "3D", 
         'filters': {'Ni_filters': [1, 2, 3]}, 
         'exposure_time': {'Ni_exp': 0.05}, 
         'rel_rot_ang': 185, 
@@ -201,7 +201,7 @@ def fxi_load_scan_list_user():
 
     txm_multi_edge_xanes2 = {
         'elements': ['Ni_wl'], 
-        'scan_type': '3D', 
+        'scan_type': "3D", 
         'filters': {'Ni_filters': [1, 2, 3]}, 
         'exposure_time': {'Ni_exp': 0.05}, 
         'rel_rot_ang': 185, 
