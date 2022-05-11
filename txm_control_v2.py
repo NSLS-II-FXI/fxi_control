@@ -225,6 +225,7 @@ class ConsoleWidget(RichIPythonWidget):
         """
         self._execute(command, False)
 
+
 class Get_motor_reading(QThread):
     current_position = pyqtSignal(float)
     def __init__(self, motor):
@@ -239,6 +240,8 @@ class Get_motor_reading(QThread):
                     current_pos = 1 # shutter closed
                 else:
                     current_pos = 0 # shutter open
+            elif 'filter' in self.motor.motor_name:
+                current_pos = self.motor.mot.value
             else:
                 if hasattr(self.motor.mot, 'position'):
                     current_pos = self.motor.mot.position
@@ -332,12 +335,12 @@ class Shutter():
 
     def fun_close_shutter(self):
         try:
-            self.pb_close_shutter.setDisabled(True)
+            self.button_pb_close_shutter.setDisabled(True)
             RE(_close_shutter())
         except Exception as err:
             print(err)
         finally:
-            self.pb_close_shutter.setDisabled(False)
+            self.button_pb_close_shutter.setDisabled(False)
 
     def fun_update_beam_current(self):
         beam_value = beam_current.read()['beam_current']['value']
@@ -543,12 +546,15 @@ class Motor_layout(Motor_base):
         return self.obj.tx_set_read
 
     def fun_reset_reading(self):
-        mot = eval(self.motor_name)
+        #mot = eval(self.motor_name)
         try:
             val = float(self.editor_reset_reading.text())
         except:
-            val = mot.position
-        self.label_motor_pos.setText(f'{val:4.4f}')
+            val = self.mot.position
+        RE(mv(self.mot.motor_calib, 1)) # change calibration to "SET"
+        RE(mv(self.mot, val))
+        RE(mv(self.mot.motor_calib, 0))
+        #self.label_motor_pos.setText(f'{val:4.4f}')
 
     def layout(self):
         lb_empty = QLabel()
@@ -974,6 +980,7 @@ class App(QWidget):
         self.setGeometry(self.left, self.top, self.width, self.height)
         self.font1 = QtGui.QFont('Arial', 12, QtGui.QFont.Bold)
         self.font2 = QtGui.QFont('Arial', 12, QtGui.QFont.Normal)
+        self.font3 = QtGui.QFont('Arial', 14, QtGui.QFont.Normal)
         self.fpath = os.getcwd()
         self.pos = {}
         self.sample_pos = {}
@@ -983,6 +990,9 @@ class App(QWidget):
         self.txm_scan = {}
         self.txm_record_scan = {}
         self.motor_display = []
+        self.msg_external_file = ''
+        self.custom_variable_value = {}
+        self.custom_variable_command = {}
         self.fn_calib_eng_file = "/nsls2/data/fxi-new/legacy/log/calib_new.csv"
         self.fpath_bluesky_startup = '/nsls2/data/fxi-new/shared/config/bluesky/profile_collection/startup'
         self.timestamp_cache_for_calib_eng_file = os.stat(self.fn_calib_eng_file)
@@ -1431,6 +1441,7 @@ class App(QWidget):
         tabs = QTabWidget()
         tab1 = QWidget()
         tab2 = QWidget()
+        tab3 = QWidget()
 
         lay1 = QVBoxLayout()
         lay1.addLayout(self.layout_pre_defined_scan())
@@ -1438,11 +1449,16 @@ class App(QWidget):
 
         lay2 = QVBoxLayout()
         #lay2.addLayout(self.hbox_optics_1())
-        lay2.addLayout(self.vbox_optics())
+        lay2.addLayout(self.vbox_advanced())
         tab2.setLayout(lay2)
+
+        lay3 = QVBoxLayout()
+        lay3.addLayout(self.vbox_other_func())
+        tab3.setLayout(lay3)
 
         tabs.addTab(tab1, 'Pre-defined scan')
         tabs.addTab(tab2, 'Advanced')
+        tabs.addTab(tab3, 'Other Func.')
         vbox = QVBoxLayout()
         vbox.addWidget(tabs)
         vbox.addStretch()
@@ -1480,7 +1496,7 @@ class App(QWidget):
         #sep.setStyleSheet('background-color: rgb(0, 80, 255);')
         sep.setStyleSheet('background-color: rgb(0, 80, 255);')
 
-        scan_cmd = self.vbox_scan_cmd()
+        scan_cmd = self.hbox_scan_cmd()
         lst_pre_scan = self.vbox_lst_pre_defined_scan()
         lst_eng_list = self.vbox_eng_list()
         lst_record_scan = self.vbox_record_scan()
@@ -1501,13 +1517,11 @@ class App(QWidget):
         hbox_scan.addLayout(oper)
         hbox_scan.addWidget(lb_space5)
         hbox_scan.addLayout(lst_assemble)
-
         hbox_scan.addStretch()
         hbox_scan.setAlignment(QtCore.Qt.AlignLeft)
         hbox_scan.addStretch()
 
         vbox_scan = QVBoxLayout()
-
         vbox_scan.addLayout(hbox_scan)
         vbox_scan.addWidget(lb_v_space1)
         vbox_scan.addLayout(scan_arg)
@@ -1519,21 +1533,17 @@ class App(QWidget):
 
         return vbox_scan
 
-    def vbox_scan_cmd(self):
-        self.lb_scan_msg = QLabel()
-        self.lb_scan_msg.setFixedWidth(500)
-        self.lb_scan_msg.setText("Scan command / Message:")
-        self.lb_scan_msg.setFixedHeight(28)
-        self.tx_scan_msg = QPlainTextEdit()
-        #self.tx_scan_msg = ConsolText()
-        self.tx_scan_msg.setFixedWidth(700)
-        self.tx_scan_msg.setFixedHeight(300)
-        self.tx_scan_msg.setFont(self.font2)
+    def hbox_scan_cmd(self):
+        lb_sep = FixLabel(self.font2, '', 0, 30)
+        hbox = QHBoxLayout()
+        hbox.addLayout(self.vbox_run_scan())
+        hbox.addWidget(lb_sep)
+        #hbox.addLayout(self.vbox_ipython())
+        hbox.addLayout(self.vbox_global_var())
+        hbox.addStretch()
+        return hbox
 
-        tx_empty = QLineEdit()
-        tx_empty.setVisible(False)
-        tx_empty.setEnabled(False)
-        
+    def vbox_ipython(self):
         lb_ipython_msg1 = QLabel()
         lb_ipython_msg1.setFont(self.font1)
         lb_ipython_msg1.setFixedWidth(320)        
@@ -1546,12 +1556,12 @@ class App(QWidget):
 
         tx_ipython_msg1 = QLineEdit()
         tx_ipython_msg1.setFont(self.font2)
-        tx_ipython_msg1.setFixedWidth(550)
+        tx_ipython_msg1.setFixedWidth(570)
         tx_ipython_msg1.setText('%run -i /nsls2/data/fxi-new/shared/software/fxi_control/load_base.py')
 
         tx_ipython_msg2 = QLineEdit()
         tx_ipython_msg2.setFont(self.font2)
-        tx_ipython_msg2.setFixedWidth(550)
+        tx_ipython_msg2.setFixedWidth(570)
         tx_ipython_msg2.setText('RE.md["scan_id"] = db[-1].start["scan_id"]')
 
         hbox_ipython1 = QHBoxLayout()
@@ -1567,13 +1577,32 @@ class App(QWidget):
         hbox_ipython2.setAlignment(QtCore.Qt.AlignLeft)
     
         self.ip_widget = make_jupyter_widget_with_kernel()        
-        self.ip_widget.setFixedWidth(900)
+        self.ip_widget.setFixedWidth(1600)
         self.ip_widget.setFixedHeight(360)
         self.ip_widget.set_default_style('linux')
         self.ip_widget.font = QtGui.QFont(self.ip_widget.font.family(), 12);
         
-        hbox_run_sid = self.hbox_run_sid()
-        hbox_scan_id = self.hbox_scan_id()
+        vbox2 = QVBoxLayout()
+        vbox2.addLayout(hbox_ipython1)
+        vbox2.addLayout(hbox_ipython2)
+        vbox2.addWidget(self.ip_widget)
+        vbox2.addStretch()
+        return vbox2
+
+    def vbox_run_scan(self):
+        self.lb_scan_msg = QLabel()
+        self.lb_scan_msg.setFixedWidth(500)
+        self.lb_scan_msg.setText("Scan command / Message:")
+        self.lb_scan_msg.setFixedHeight(30)
+
+        self.tx_scan_msg = QPlainTextEdit()
+        self.tx_scan_msg.setFixedWidth(840)
+        self.tx_scan_msg.setFixedHeight(260)
+        self.tx_scan_msg.setFont(self.font3)
+
+        tx_empty = QLineEdit()
+        tx_empty.setVisible(False)
+        tx_empty.setEnabled(False)
 
         hbox_commd_msg = QHBoxLayout()
         hbox_commd_msg.addWidget(self.lb_scan_msg)
@@ -1582,24 +1611,13 @@ class App(QWidget):
         hbox_commd_msg.addStretch()
 
         vbox1 = QVBoxLayout()
-        vbox1.addLayout(hbox_commd_msg)
-        vbox1.addLayout(hbox_scan_id)
+        #vbox1.addLayout(hbox_commd_msg)
+        vbox1.addLayout(self.hbox_scan_id())
         vbox1.addWidget(self.tx_scan_msg)
-        vbox1.addLayout(hbox_run_sid)
+        vbox1.addLayout(self.hbox_run_sid())
         vbox1.addStretch()
 
-        vbox2 = QVBoxLayout()
-        vbox2.addLayout(hbox_ipython1)
-        vbox2.addLayout(hbox_ipython2)
-        vbox2.addWidget(self.ip_widget)
-        vbox2.addStretch()
-
-        hbox = QHBoxLayout()
-        hbox.addLayout(vbox1)
-        hbox.addLayout(vbox2)
-        hbox.addStretch()
-
-        return hbox
+        return vbox1
 
     def hbox_run_sid(self):
         lb_empty = QLabel()
@@ -1739,7 +1757,7 @@ class App(QWidget):
         #self.pb_scan_list3.setFont(self.font2)
         self.pb_scan_list3.clicked.connect(lambda: self.load_scan_type_list(3))
 
-        self.pb_scan_list4 = FixButton(self.font2, 'Load .py file ...', 135)
+        self.pb_scan_list4 = FixButton(self.font2, 'Extract .py file ...', 135)
         self.pb_scan_list4.clicked.connect(lambda: self.update_scan_type_list(4))
 
         self.pb_scan_list1_update = FixButton(self.font2, 'U', 30)
@@ -2084,6 +2102,7 @@ class App(QWidget):
     def layout_matrix_scan_argument(self):
         self.scan_lb = {}
         self.scan_tx = {}
+        lb_empty = FixLabel(self.font2, '', 30)
         hbox = {}
         vbox = QVBoxLayout()
         for i in range(20):
@@ -2123,6 +2142,9 @@ class App(QWidget):
         self.pb_read_current_eng.setFixedWidth(120)
         self.pb_read_current_eng.setFont(self.font2)
 
+        lb_pix = FixLabel(self.font1, 'Pixel size:', 80)
+        self.lb_pixel_size = FixLabel(self.font2, '', 120)
+
         for i in range(4):
             hbox[f'hbox_{i}'] = QHBoxLayout()
             for j in range(5):
@@ -2135,6 +2157,10 @@ class App(QWidget):
         hbox['note'].addWidget(self.scan_lb['XEng'])
         hbox['note'].addWidget(self.scan_tx['XEng'])
         hbox['note'].addWidget(self.pb_read_current_eng)
+        hbox['note'].addWidget(lb_empty)
+        hbox['note'].addWidget(lb_pix)
+        hbox['note'].addWidget(self.lb_pixel_size)
+        
         hbox['note'].setAlignment(QtCore.Qt.AlignLeft)
 
         lb_empty = QLabel()
@@ -2646,7 +2672,7 @@ class App(QWidget):
             for key in self.sample_pos.keys():
                 x, y = self.sample_pos[key]['x'], self.sample_pos[key]['y']
                 z, r = self.sample_pos[key]['z'], self.sample_pos[key]['r']
-                cmd_move_pos[key] = f'RE(mv(zps.sx, {x}, zps.sy, {y}, zps.sz, {z}, zps.pi_r, {r}))  #{key}'
+                cmd_move_pos[key] = f'RE(mv(zps.sx, {x}, zps.sy, {y}, zps.sz, {z}, zps.pi_r, {r}))  #{key}\n'
             for key in self.sample_pos.keys():
                 cmd_all += cmd_move_pos[key] + '\n'
                 cmd_all += cmd + '\n\n'
@@ -2847,8 +2873,9 @@ class App(QWidget):
             self.pb_pause_scan.setStyleSheet('color: rgb(200, 50, 50);')
             exec(cmd)
             if 'RE(' in cmd:
-                print('\n\nscan finished\n\n')
-                self.tx_scan_msg.setPlainText('\n\nscan finished\n\n')
+                msg = '\n\nscan finished\n\n'
+                print(msg)
+                #self.tx_scan_msg.setPlainText(msg)
         except Exception as err:
             msg += str(err) + '\n'
             print(msg)
@@ -2860,16 +2887,13 @@ class App(QWidget):
             self.pb_run_scan.setText('Run')
             self.pb_run_scan.setEnabled(True)
             self.pb_pause_scan.setEnabled(False)
-            #self.pos_sync()
-            print(msg)
-            self.tx_scan_msg.setPlainText(msg)
             try:
                 sid = db[-1].start['scan_id']
                 self.lb_current_sid.setText(str(sid))
             except Exception as err:
                 msg += str(err) + '\n'
                 print(msg)
-                self.tx_scan_msg.setPlainText(msg)
+            self.tx_scan_msg.setPlainText(msg)
 
     def load_scan_type_list(self, scan_type=1, fpath_scan_list=''):
         global scan_list
@@ -3177,13 +3201,15 @@ class App(QWidget):
     Tab 2: motors and detectors and advanced operation
     '''
 
-    def vbox_optics(self):
+    def vbox_advanced(self):
         lb_empty = QLabel()
         lb_empty1 = QLabel()
         lb_empty2 = QLabel()
         lb_empty2.setFixedWidth(30)
         lb_empty3 = QLabel()
         lb_empty3.setFixedWidth(30)
+        lb_empty4 = QLabel()
+        lb_empty4.setFixedHeight(10)
 
         #hbox_optics = self.hbox_optics_1()
         hbox_record = self.layout_record_eng_calib()
@@ -3208,7 +3234,7 @@ class App(QWidget):
         vbox.addWidget(lb_empty)
         vbox.addWidget(self.chk_reset_reading)
         vbox.addLayout(self.hbox_optics_adv())
-        vbox.addWidget(lb_empty1)
+        vbox.addWidget(lb_empty4)
         vbox.addStretch()
 
         return vbox
@@ -3758,6 +3784,12 @@ class App(QWidget):
         self.filt2 = Filter_layout(self, 'filter2', 'Filter 2 (2-Al)')
         self.filt3 = Filter_layout(self, 'filter3', 'Filter 3 (3-Al)')
         self.filt4 = Filter_layout(self, 'filter4', 'Filter 4 (1-Cu)')
+        
+        self.motor_display.append(self.filt1)
+        self.motor_display.append(self.filt2)
+        self.motor_display.append(self.filt3)
+        self.motor_display.append(self.filt4)
+
         vbox = QVBoxLayout()
         vbox.addWidget(lb_title)
         vbox.addWidget(lb_sep)
@@ -4008,6 +4040,245 @@ class App(QWidget):
         vbox.setAlignment(QtCore.Qt.AlignLeft)
         return vbox
     
+
+    ################ Tab 3  ###################
+    def vbox_other_func(self):
+        lb_empty1 = QLabel()
+        lb_empty2 = QLabel()
+        hbox = QHBoxLayout()
+        hbox.addLayout(self.vbox_load_external_py_file())
+        #hbox.addLayout(self.vbox_global_var())        
+        hbox.addWidget(lb_empty1)
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+        hbox.addStretch()
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(hbox)
+        vbox.addLayout(self.vbox_ipython())
+        vbox.addWidget(lb_empty2)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        return vbox
+
+    def vbox_load_external_py_file(self):
+        lb_empty = QLabel()
+        lb_empty2 = QLabel()
+        lb_external_file = FixLabel(self.font1, 'Load external .py file:', 180)
+        self.pb_ext_file = FixButton(self.font2, 'Open and Load', 150)
+        self.pb_ext_file.clicked.connect(self.fun_load_ext_py_file)
+        self.tx_ext_file_msg = QPlainTextEdit()
+        self.tx_ext_file_msg.setFont(self.font2)
+        self.tx_ext_file_msg.setFixedHeight(200)
+        self.tx_ext_file_msg.setFixedWidth(600)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(lb_external_file)
+        #hbox.addWidget(self.pb_ext_file)
+        hbox.addWidget(lb_empty)
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(hbox)
+        vbox.addWidget(self.tx_ext_file_msg)
+        vbox.addWidget(self.pb_ext_file)
+        vbox.addWidget(lb_empty2)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+        return vbox
+
+    def vbox_global_var(self):
+        lb_empty = QLabel()
+        lb_empty2 = QLabel()
+        hbox = QHBoxLayout()
+        hbox.addLayout(self.vbox_global_var_msg())
+        hbox.addLayout(self.vbox_global_var_name_list())
+        hbox.addLayout(self.vbox_global_var_value_list())
+        hbox.addLayout(self.vbox_global_var_command_list())
+        #hbox.addLayout(self.vbox_global_var_value())
+        hbox.addWidget(lb_empty)
+        hbox.setAlignment(QtCore.Qt.AlignLeft)
+        hbox.addStretch()
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(hbox)        
+        vbox.addLayout(self.hbox_global_var_button()) 
+        vbox.addWidget(lb_empty)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+        return vbox
+
+    def vbox_global_var_msg(self):
+        lb_empty2 = QLabel()        
+        lb_msg = FixLabel(self.font1, 'Python input', 120, 27)
+
+        self.tx_var_file_msg = QPlainTextEdit()
+        self.tx_var_file_msg.setFont(self.font2)
+        self.tx_var_file_msg.setFixedHeight(260)
+        self.tx_var_file_msg.setFixedWidth(220)
+
+        vbox = QVBoxLayout()
+        vbox.addWidget(lb_msg)
+        vbox.addWidget(self.tx_var_file_msg) 
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+        return vbox
+
+    def hbox_global_var_button(self): 
+        lb_empty = QLabel()
+        lb_sep = FixLabel(self.font2, '', 0, 10)
+        self.lb_var_msg = FixLabel(self.font2, 'Msg: ', 400)
+        self.pb_var_file = FixButton(self.font2, 'Execute', 80, 40)
+        self.pb_var_file.clicked.connect(self.define_global_var)
+
+        self.pb_var_save = FixButton(self.font2, 'Save', 80, 40)
+        self.pb_var_save.clicked.connect(self.save_var_to_file)
+
+        hbox_button = QHBoxLayout()
+        hbox_button.addWidget(self.pb_var_file)
+        hbox_button.addWidget(self.pb_var_save)
+        hbox_button.addWidget(lb_sep)
+        hbox_button.addWidget(self.lb_var_msg)
+        hbox_button.addWidget(lb_empty)
+        hbox_button.setAlignment(QtCore.Qt.AlignLeft)
+        return hbox_button
+
+    def vbox_global_var_name_list(self):
+        lb_var_list = FixLabel(self.font1, 'Var.', 70, 27)
+        self.lst_saved_var = QListWidget()
+        self.lst_saved_var.setFixedHeight(260)
+        self.lst_saved_var.setFixedWidth(70)
+        self.lst_saved_var.setFont(self.font2)
+        vbox = QVBoxLayout()
+        vbox.addWidget(lb_var_list)
+        vbox.addWidget(self.lst_saved_var)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+        return vbox
+
+    def vbox_global_var_value_list(self):
+        lb_value_list = FixLabel(self.font1, 'Value', 70, 27)
+        self.lst_saved_var_value = QListWidget()
+        self.lst_saved_var_value.setFixedHeight(260)
+        self.lst_saved_var_value.setFixedWidth(220)
+        self.lst_saved_var_value.setFont(self.font2)
+        vbox = QVBoxLayout()
+        vbox.addWidget(lb_value_list)
+        vbox.addWidget(self.lst_saved_var_value)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+        return vbox
+
+
+    def vbox_global_var_command_list(self):
+        lb_var_list_comm = FixLabel(self.font1, 'Command history', 160, 27)
+        self.lst_saved_var_comm = QListWidget()
+        self.lst_saved_var_comm.setFixedHeight(260)
+        self.lst_saved_var_comm.setFixedWidth(220)
+        self.lst_saved_var_comm.setFont(self.font2)
+        vbox = QVBoxLayout()
+        vbox.addWidget(lb_var_list_comm)
+        vbox.addWidget(self.lst_saved_var_comm)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+        return vbox
+
+    def vbox_global_var_value(self):
+        lb_var_list_val = FixLabel(self.font1, 'Value', 120)
+        self.lst_saved_var_val = QListWidget()
+        self.lst_saved_var_val.setFixedHeight(200)
+        self.lst_saved_var_val.setFixedWidth(240)
+        self.lst_saved_var_val.setFont(self.font3)
+        vbox = QVBoxLayout()
+        vbox.addWidget(lb_var_list_val)
+        vbox.addWidget(self.lst_saved_var_val)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+        return vbox
+
+    def save_var_to_file(self):
+        options = QFileDialog.Option()
+        options |= QFileDialog.DontUseNativeDialog
+        fn,_ = QFileDialog.getSaveFileName(self, "Save to file", "")
+        print(fn)
+        if fn:
+            fn_split = fn.split('/')
+            fn_short = fn
+            if len(fn_split) > 3:
+                fn_short = '/'.join(t for t in fn_split[-3:])
+            msg = ''
+            try:
+                if not fn.split('.')[-1] == 'py':
+                    fn += '.py'
+                with open(fn,'w') as f:
+                    cmd = self.tx_var_file_msg.toPlainText()
+                    f.write(cmd)
+                msg = f'saved to .../{fn_short}'
+                print(f'saved to {fn}')
+            except Exception as err:
+                msg = str(err)
+                print(msg)
+            finally:
+                self.lb_var_msg.setText('Msg: ' + msg)
+                   
+    def define_global_var(self):
+        cmd = self.tx_var_file_msg.toPlainText()
+        msg = ''
+        fn_save_tmp = '/tmp/tmp_global_variable.py'
+        with open(fn_save_tmp, 'w') as f:
+            f.write(cmd)
+        try:
+            get_ipython().run_line_magic("run", f"-i {fn_save_tmp}")
+            msg = 'Execute successfully!'
+        except Exception as err:
+            msg = err
+        finally:
+            #self.lb_var_msg.setText(msg)
+            print(msg)
+        self.update_variable_list(fn_save_tmp)
+
+    def update_variable_list(self, fn_save_tmp):
+        arg_name, arg_comm, arg_value, msg = extract_variable(fn_save_tmp)
+        dict_comm = {}
+        dict_value = {}
+        n = len(arg_comm)
+        for i in range(n):
+            dict_comm[arg_name[i]] = arg_comm[i]
+            dict_value[arg_name[i]] = arg_value[i]
+        self.custom_variable_value = merge_dict(self.custom_variable_value, dict_value)
+        self.custom_variable_command = merge_dict(self.custom_variable_command, dict_comm)
+        self.lst_saved_var.clear()
+        self.lst_saved_var_comm.clear()
+        for k in self.custom_variable_value.keys():
+            print(k)
+            try:            
+                comm = self.custom_variable_command[k].strip()
+                comm = f'{k} = {comm}'
+            
+                val = str(self.custom_variable_value[k])
+                print(len(val))
+                if len(val) > 80:
+                    val = val[:40] + ' ... ' + val[-40:]
+                self.lst_saved_var.addItem(k)         
+                self.lst_saved_var_value.addItem(str(val))
+                self.lst_saved_var_comm.addItem(comm)
+            except Exception as err:
+                print(err)
+                continue
+
+    def fun_load_ext_py_file(self):
+        options = QFileDialog.Option()
+        options |= QFileDialog.DontUseNativeDialog
+        file_type = 'python files (*.py)'
+        fn, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "", file_type, options=options)
+        if fn:
+            fname_read = fn   
+            try: 
+                get_ipython().run_line_magic("run", f"-i {fn}")
+                msg = f'Loaded successful: {fn}\n'     
+            except:
+                msg = f'FAILS TO LOAD FILE: {fn}\n'           
+            self.msg_external_file += msg
+            self.tx_ext_file_msg.setPlainText(self.msg_external_file)
+
     def enable_reset_reading(self):
         for mot in self.motor_display:
             if hasattr(mot, 'button_reset_reading'):
@@ -4106,6 +4377,7 @@ class App(QWidget):
         self.lb_current_mag.setText(f'{GLOBAL_MAG:3.2f}')
         self.lb_zp_mag.setText(f'{GLOBAL_MAG/GLOBAL_VLM_MAG:3.2f}')
         self.lb_pix_size.setText(f'{6500./GLOBAL_MAG:2.2f} nm')
+        self.lb_pixel_size.setText(f'{6500./GLOBAL_MAG:2.2f} nm')
 
     def display_calib_eng_detail(self):
         item = self.lst_eng_calib.selectedItems()
@@ -4257,7 +4529,9 @@ def convert_fpath_to_string(file_lines):
     for i in idx:
         l = file_lines[i]
         arg_name = l.split(':')[0]
-        arg_val = l[len(arg_name)+1:].strip().replace(',', '')
+        arg_val = ':'.join(t for t in l.split(':')[1:])
+        arg_val = arg_val.strip().replace(',', '')
+        #arg_val = l[len(arg_name)+1:].strip().replace(',', '')
         lines_copy[i] = arg_name + ': ' + '"' + arg_val + '",'
     return lines_copy
 
@@ -4266,13 +4540,14 @@ def convert_initial_digit_to_string(file_lines):
     idx = []
     for i, l in enumerate(file_lines):
         arg_name = l.split(':')[0]
-        arg_val = l.split(':')[-1].strip()
+        arg_val = ':'.join(t for t in l.split(':')[1:])
+        arg_val = arg_val.strip().replace(',', '')
         try:
             tmp = eval(arg_val)
         except:
             try:
                 if arg_val[0].isdigit():
-                    lines_copy[i] = arg_name +  '"' + arg_val + '",'
+                    lines_copy[i] = arg_name + ':' + '"' + arg_val + '",'
             except:
                 pass
     return lines_copy
@@ -4294,6 +4569,35 @@ def convert_epics_to_string(file_lines):
         arg_val = ll.split('=')[-1]
         lines_copy[i] = arg_name + ': ' + arg_val + ','  
     return lines_copy
+
+
+def extract_variable(file_name):
+    # get defined variable from .py file
+    # exclude variable defined inside "function" and "class"
+    msg = ''
+    with open(file_name, 'r') as f:
+       lines = f.readlines()
+    arg_name = []
+    arg_comm = []
+    arg_valu = []
+    get_ipython().run_line_magic("run", f"-i {file_name}")
+
+    for i, l in enumerate(lines):
+        if len(l)-len(l.lstrip()) > 0: # there are leading spaces
+            continue
+        t = l.split('=')
+        if len(t) == 2:
+            try:
+                val = eval(t[1])
+                arg_name.append(t[0])
+                arg_comm.append(t[1].replace('\n', ''))
+                arg_valu.append(val)
+            except:
+                msg = f'Syntax error found in line {i}'
+                continue
+    return arg_name, arg_comm, arg_valu, msg
+
+
 
 def run_main():
     app = QApplication(sys.argv)
