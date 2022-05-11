@@ -991,6 +991,8 @@ class App(QWidget):
         self.txm_record_scan = {}
         self.motor_display = []
         self.msg_external_file = ''
+        self.temporary_py_file = ''
+        self.temporary_py_scan_list = {}
         self.custom_variable_value = {}
         self.custom_variable_command = {}
         self.fn_calib_eng_file = "/nsls2/data/fxi-new/legacy/log/calib_new.csv"
@@ -1740,45 +1742,28 @@ class App(QWidget):
         self.lst_scan.setSelectionMode(QAbstractItemView.SingleSelection)
 
         self.pb_scan_list1 = FixButton(self.font2, 'Common', 100)
-        #self.pb_scan_list1 = QPushButton('Common')
-        #self.pb_scan_list1.setFixedWidth(100)
-        #self.pb_scan_list1.setFont(self.font2)
         self.pb_scan_list1.clicked.connect(lambda: self.load_scan_type_list(1))
 
         self.pb_scan_list2 = FixButton(self.font2, 'Other scan', 100)
-        #self.pb_scan_list2 = QPushButton('Other scan')
-        #self.pb_scan_list2.setFixedWidth(100)
-        #self.pb_scan_list2.setFont(self.font2)
         self.pb_scan_list2.clicked.connect(lambda: self.load_scan_type_list(2))
 
         self.pb_scan_list3 = FixButton(self.font2, 'User scan', 100)
-        #self.pb_scan_list3 = QPushButton('User scan')
-        #self.pb_scan_list3.setFixedWidth(100)
-        #self.pb_scan_list3.setFont(self.font2)
         self.pb_scan_list3.clicked.connect(lambda: self.load_scan_type_list(3))
 
         self.pb_scan_list4 = FixButton(self.font2, 'Extract .py file ...', 135)
         self.pb_scan_list4.clicked.connect(lambda: self.update_scan_type_list(4))
 
+        self.pb_scan_list5 = FixButton(self.font2, 'Temporary loaded', 135)
+        self.pb_scan_list5.clicked.connect(lambda: self.load_scan_type_list(5))
+
         self.pb_scan_list1_update = FixButton(self.font2, 'U', 30)
-        #self.pb_scan_list1_update = QPushButton('U')
-        #self.pb_scan_list1_update.setFixedWidth(30)
-        #self.pb_scan_list1_update.setFont(self.font2)
         self.pb_scan_list1_update.clicked.connect(lambda: self.update_scan_type_list(1))
 
         self.pb_scan_list2_update = FixButton(self.font2, 'U', 30)
-        #self.pb_scan_list2_update = QPushButton('U')
-        #self.pb_scan_list2_update.setFixedWidth(30)
-        #self.pb_scan_list2_update.setFont(self.font2)
         self.pb_scan_list2_update.clicked.connect(lambda: self.update_scan_type_list(2))
 
         self.pb_scan_list3_update = FixButton(self.font2, 'U', 30)
-        #self.pb_scan_list3_update = QPushButton('U')
-        #self.pb_scan_list3_update.setFixedWidth(30)
-        #self.pb_scan_list3_update.setFont(self.font2)
         self.pb_scan_list3_update.clicked.connect(lambda: self.update_scan_type_list(3))
-
-        
 
         hbox_scan_list1 = QHBoxLayout()
         hbox_scan_list1.addWidget(self.pb_scan_list1)
@@ -1800,6 +1785,7 @@ class App(QWidget):
         vbox_load_scan.addLayout(hbox_scan_list2)
         vbox_load_scan.addLayout(hbox_scan_list3)
         vbox_load_scan.addWidget(self.pb_scan_list4)
+        vbox_load_scan.addWidget(self.pb_scan_list5)
         vbox_load_scan.setAlignment(QtCore.Qt.AlignTop)
 
         hbox = QHBoxLayout()
@@ -2931,6 +2917,11 @@ class App(QWidget):
                 fun_name = [f.name for f in ast.parse(source).body if isinstance(f, ast.FunctionDef)]
                 tmp_scan_list = eval(fun_name[0] + '()')   
                 msg = f'load custom scan in: {fpath_scan_list}'
+                self.temporary_py_file = fpath_scan_list
+                self.temporary_py_scan_list = tmp_scan_list
+            if scan_type == 5:
+                if len(self.temporary_py_file):
+                    tmp_scan_list = self.temporary_py_scan_list
             scan_list = merge_dict(scan_list, tmp_scan_list)            
             self.lst_scan.clear()
             #QApplication.processEvents() 
@@ -4225,14 +4216,16 @@ class App(QWidget):
         fn_save_tmp = '/tmp/tmp_global_variable.py'
         with open(fn_save_tmp, 'w') as f:
             f.write(cmd)
+        '''
         try:
-            get_ipython().run_line_magic("run", f"-i {fn_save_tmp}")
+            #get_ipython().run_line_magic("run", f"-i {fn_save_tmp}")
             msg = 'Execute successfully!'
         except Exception as err:
             msg = err
         finally:
             #self.lb_var_msg.setText(msg)
             print(msg)
+        '''
         self.update_variable_list(fn_save_tmp)
 
     def update_variable_list(self, fn_save_tmp):
@@ -4246,15 +4239,13 @@ class App(QWidget):
         self.custom_variable_value = merge_dict(self.custom_variable_value, dict_value)
         self.custom_variable_command = merge_dict(self.custom_variable_command, dict_comm)
         self.lst_saved_var.clear()
+        self.lst_saved_var_value.clear()
         self.lst_saved_var_comm.clear()
         for k in self.custom_variable_value.keys():
-            print(k)
             try:            
                 comm = self.custom_variable_command[k].strip()
-                comm = f'{k} = {comm}'
-            
+                comm = f'{k} = {comm}'            
                 val = str(self.custom_variable_value[k])
-                print(len(val))
                 if len(val) > 80:
                     val = val[:40] + ' ... ' + val[-40:]
                 self.lst_saved_var.addItem(k)         
@@ -4588,8 +4579,9 @@ def extract_variable(file_name):
         t = l.split('=')
         if len(t) == 2:
             try:
-                val = eval(t[1])
+                #val = eval(t[1])
                 arg_name.append(t[0])
+                val = eval(arg_name[0])                
                 arg_comm.append(t[1].replace('\n', ''))
                 arg_valu.append(val)
             except:
