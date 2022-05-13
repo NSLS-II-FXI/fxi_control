@@ -120,21 +120,68 @@ def extract_variable(file_name):
     with open(file_name, 'r') as f:
        lines = f.readlines()
     arg_name = []
-    arg_comm = []
-    arg_valu = []
+    arg_command = []
+    arg_value = []    
     get_ipython().run_line_magic("run", f"-i {file_name}")
-
     for i, l in enumerate(lines):
         if len(l)-len(l.lstrip()) > 0: # there are leading spaces
             continue
         t = l.split('=')
         if len(t) == 2:
             try:
-                val = eval(t[1])
+                #val = eval(t[1])
                 arg_name.append(t[0])
-                arg_comm.append(t[1].replace('\n', ''))
-                arg_valu.append(val)
+                val = eval(arg_name[0])                
+                arg_command.append(t[1].replace('\n', ''))
+                arg_value.append(val)
             except:
                 msg = f'Syntax error found in line {i}'
                 continue
-    return arg_name, arg_comm, arg_valu, msg
+    dict = {}
+    n = len(arg_command)
+    for i in range(n):
+        tmp_dict = {}
+        tmp_dict['command'] = arg_command[i].lstrip()
+        tmp_dict['value'] = arg_value[i]
+        tmp_dict['type'] = 'variable'
+        dict[arg_name[i]] = tmp_dict
+    return dict
+
+
+def extract_function(fname, key='def'):
+    with open(fname, 'r') as f:
+        lines = f.readlines()        
+    n = len(lines)
+    n_fun = 0
+    dict_fun = {}
+    txt_fun_name = []
+    line_fun = []    
+    len_key = len(key)   
+    find_fun = False 
+    for i in range(n-1):        
+        l = lines[i]
+        l_next = lines[i+1]
+        if l[:len_key+1] == key + ' ':
+            find_fun = True
+            txt_fun_name.append(l[len_key:].split('(')[0].lstrip())
+        if find_fun:
+            line_fun.append(l)
+            if l_next[0] != ' ':                
+                dict_fun[txt_fun_name[-1]] = line_fun
+                line_fun = []
+                n_fun = n_fun + 1
+                find_fun = False
+    if find_fun:
+        if l_next[0] == ' ':
+            line_fun.append(l_next)
+        dict_fun[txt_fun_name[-1]] = line_fun
+        n_fun += 1 
+
+    dict = {}
+    for k in dict_fun.keys():
+        tmp_dict = {}
+        tmp_dict['command'] = dict_fun[k]
+        tmp_dict['value'] = ''
+        tmp_dict['type'] = key
+        dict[k] = tmp_dict
+    return dict

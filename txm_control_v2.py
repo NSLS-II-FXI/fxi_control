@@ -993,8 +993,7 @@ class App(QWidget):
         self.msg_external_file = ''
         self.temporary_py_file = ''
         self.temporary_py_scan_list = {}
-        self.custom_variable_value = {}
-        self.custom_variable_command = {}
+        self.custom_variable_dict = {}
         self.fn_calib_eng_file = "/nsls2/data/fxi-new/legacy/log/calib_new.csv"
         self.fpath_bluesky_startup = '/nsls2/data/fxi-new/shared/config/bluesky/profile_collection/startup'
         self.timestamp_cache_for_calib_eng_file = os.stat(self.fn_calib_eng_file)
@@ -3466,7 +3465,7 @@ class App(QWidget):
         vbox_zp.setAlignment(QtCore.Qt.AlignTop)
 
         return vbox_zp
-
+    '''
     def hbox_optics_1(self):
         # get together
         lb_empty = QLabel()
@@ -3764,7 +3763,7 @@ class App(QWidget):
         vbox_7.addStretch()
         vbox_7.setAlignment(QtCore.Qt.AlignTop)
         return vbox_7
-
+    '''
     def vbox_filter(self):
         lb_empty = QLabel()
         lb_title = FixLabel(self.font1, 'SSA Filters')
@@ -3792,10 +3791,6 @@ class App(QWidget):
         vbox.setAlignment(QtCore.Qt.AlignTop)
         vbox.addStretch()
 
-        #self.motor_display.append(self.filt1)
-        #self.motor_display.append(self.filt2)
-        #self.motor_display.append(self.filt3)
-        #self.motor_display.append(self.filt4)
         return vbox
 
     def layout_record_eng_calib(self):
@@ -3920,14 +3915,7 @@ class App(QWidget):
         #vbox.addWidget(lb_empty2)
         vbox.addStretch()
         vbox.setAlignment(QtCore.Qt.AlignTop)
-        '''
-        hbox_all = QHBoxLayout()
-        hbox_all.addLayout(vbox)
-        hbox_all.addWidget(lb_empty2)
-        hbox_all.addStretch()
-        hbox_all.setAlignment(QtCore.Qt.AlignLeft)
-        return hbox_all
-        '''
+
         return vbox
 
     def vbox_motor_cond(self):
@@ -4082,9 +4070,7 @@ class App(QWidget):
         hbox = QHBoxLayout()
         hbox.addLayout(self.vbox_global_var_msg())
         hbox.addLayout(self.vbox_global_var_name_list())
-        hbox.addLayout(self.vbox_global_var_value_list())
-        hbox.addLayout(self.vbox_global_var_command_list())
-        #hbox.addLayout(self.vbox_global_var_value())
+        hbox.addLayout(self.vbox_global_var_value_editor())
         hbox.addWidget(lb_empty)
         hbox.setAlignment(QtCore.Qt.AlignLeft)
         hbox.addStretch()
@@ -4104,7 +4090,7 @@ class App(QWidget):
         self.tx_var_file_msg = QPlainTextEdit()
         self.tx_var_file_msg.setFont(self.font2)
         self.tx_var_file_msg.setFixedHeight(260)
-        self.tx_var_file_msg.setFixedWidth(220)
+        self.tx_var_file_msg.setFixedWidth(250)
 
         vbox = QVBoxLayout()
         vbox.addWidget(lb_msg)
@@ -4136,8 +4122,9 @@ class App(QWidget):
         lb_var_list = FixLabel(self.font1, 'Var.', 70, 27)
         self.lst_saved_var = QListWidget()
         self.lst_saved_var.setFixedHeight(260)
-        self.lst_saved_var.setFixedWidth(70)
+        self.lst_saved_var.setFixedWidth(150)
         self.lst_saved_var.setFont(self.font2)
+        self.lst_saved_var.itemClicked.connect(self.show_varible_value)
         vbox = QVBoxLayout()
         vbox.addWidget(lb_var_list)
         vbox.addWidget(self.lst_saved_var)
@@ -4149,11 +4136,24 @@ class App(QWidget):
         lb_value_list = FixLabel(self.font1, 'Value', 70, 27)
         self.lst_saved_var_value = QListWidget()
         self.lst_saved_var_value.setFixedHeight(260)
-        self.lst_saved_var_value.setFixedWidth(220)
+        self.lst_saved_var_value.setFixedWidth(250)
         self.lst_saved_var_value.setFont(self.font2)
         vbox = QVBoxLayout()
         vbox.addWidget(lb_value_list)
         vbox.addWidget(self.lst_saved_var_value)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        vbox.addStretch()
+        return vbox
+
+    def vbox_global_var_value_editor(self):
+        self.tx_saved_var_value = QPlainTextEdit()
+        self.tx_saved_var_value.setFixedHeight(260)
+        self.tx_saved_var_value.setFixedWidth(220)
+        self.tx_saved_var_value.setFont(self.font3)
+        lb_value_list = FixLabel(self.font1, 'Value', 70, 27)
+        vbox = QVBoxLayout()
+        vbox.addWidget(lb_value_list)
+        vbox.addWidget(self.tx_saved_var_value)
         vbox.setAlignment(QtCore.Qt.AlignTop)
         vbox.addStretch()
         return vbox
@@ -4216,44 +4216,37 @@ class App(QWidget):
         fn_save_tmp = '/tmp/tmp_global_variable.py'
         with open(fn_save_tmp, 'w') as f:
             f.write(cmd)
-        '''
-        try:
-            #get_ipython().run_line_magic("run", f"-i {fn_save_tmp}")
-            msg = 'Execute successfully!'
-        except Exception as err:
-            msg = err
-        finally:
-            #self.lb_var_msg.setText(msg)
-            print(msg)
-        '''
         self.update_variable_list(fn_save_tmp)
 
     def update_variable_list(self, fn_save_tmp):
-        arg_name, arg_comm, arg_value, msg = extract_variable(fn_save_tmp)
-        dict_comm = {}
-        dict_value = {}
-        n = len(arg_comm)
-        for i in range(n):
-            dict_comm[arg_name[i]] = arg_comm[i]
-            dict_value[arg_name[i]] = arg_value[i]
-        self.custom_variable_value = merge_dict(self.custom_variable_value, dict_value)
-        self.custom_variable_command = merge_dict(self.custom_variable_command, dict_comm)
+        dict_variable = extract_variable(fn_save_tmp)
+        dict_function = extract_function(fn_save_tmp, 'def')
+        dict_class = extract_function(fn_save_tmp, 'class')
+
+        self.custom_variable_dict = merge_dict(self.custom_variable_dict, dict_variable)
+        self.custom_variable_dict = merge_dict(self.custom_variable_dict, dict_function)
+        self.custom_variable_dict = merge_dict(self.custom_variable_dict, dict_class)
+
+        keys = [k for k in self.custom_variable_dict.keys()]
         self.lst_saved_var.clear()
-        self.lst_saved_var_value.clear()
-        self.lst_saved_var_comm.clear()
-        for k in self.custom_variable_value.keys():
-            try:            
-                comm = self.custom_variable_command[k].strip()
-                comm = f'{k} = {comm}'            
-                val = str(self.custom_variable_value[k])
-                if len(val) > 80:
-                    val = val[:40] + ' ... ' + val[-40:]
-                self.lst_saved_var.addItem(k)         
-                self.lst_saved_var_value.addItem(str(val))
-                self.lst_saved_var_comm.addItem(comm)
-            except Exception as err:
-                print(err)
-                continue
+        for k in keys:
+            self.lst_saved_var.addItem(k)
+
+    def show_varible_value(self):
+        item = self.lst_saved_var.selectedItems()
+        key = item[0].text()
+        command = self.custom_variable_dict[key]['command']
+        value = self.custom_variable_dict[key]['value']
+        key_type = self.custom_variable_dict[key]['type']
+        cmd0 = ''.join(c for c in command)
+
+        cmd = '\n'
+        if key_type == 'variable':
+            cmd0 = cmd0.lstrip()
+            cmd0 = f'command:\n{key} = {cmd0}\n'
+            cmd += f'value:\n{key} = {value}' 
+        text = cmd0 + cmd
+        self.tx_saved_var_value.setPlainText(text)
 
     def fun_load_ext_py_file(self):
         options = QFileDialog.Option()
@@ -4569,10 +4562,9 @@ def extract_variable(file_name):
     with open(file_name, 'r') as f:
        lines = f.readlines()
     arg_name = []
-    arg_comm = []
-    arg_valu = []
+    arg_command = []
+    arg_value = []    
     get_ipython().run_line_magic("run", f"-i {file_name}")
-
     for i, l in enumerate(lines):
         if len(l)-len(l.lstrip()) > 0: # there are leading spaces
             continue
@@ -4582,14 +4574,58 @@ def extract_variable(file_name):
                 #val = eval(t[1])
                 arg_name.append(t[0])
                 val = eval(arg_name[0])                
-                arg_comm.append(t[1].replace('\n', ''))
-                arg_valu.append(val)
+                arg_command.append(t[1].replace('\n', ''))
+                arg_value.append(val)
             except:
                 msg = f'Syntax error found in line {i}'
                 continue
-    return arg_name, arg_comm, arg_valu, msg
+    dict = {}
+    n = len(arg_command)
+    for i in range(n):
+        tmp_dict = {}
+        tmp_dict['command'] = arg_command[i].lstrip()
+        tmp_dict['value'] = arg_value[i]
+        tmp_dict['type'] = 'variable'
+        dict[arg_name[i]] = tmp_dict
+    return dict
 
+def extract_function(fname, key='def'):
+    with open(fname, 'r') as f:
+        lines = f.readlines()        
+    n = len(lines)
+    n_fun = 0
+    dict_fun = {}
+    txt_fun_name = []
+    line_fun = []    
+    len_key = len(key)   
+    find_fun = False 
+    for i in range(n-1):        
+        l = lines[i]
+        l_next = lines[i+1]
+        if l[:len_key+1] == key + ' ':
+            find_fun = True
+            txt_fun_name.append(l[len_key:].split('(')[0].lstrip())
+        if find_fun:
+            line_fun.append(l)
+            if l_next[0] != ' ':                
+                dict_fun[txt_fun_name[-1]] = line_fun
+                line_fun = []
+                n_fun = n_fun + 1
+                find_fun = False
+    if find_fun:
+        if l_next[0] == ' ':
+            line_fun.append(l_next)
+        dict_fun[txt_fun_name[-1]] = line_fun
+        n_fun += 1 
 
+    dict = {}
+    for k in dict_fun.keys():
+        tmp_dict = {}
+        tmp_dict['command'] = dict_fun[k]
+        tmp_dict['value'] = ''
+        tmp_dict['type'] = key
+        dict[k] = tmp_dict
+    return dict
 
 def run_main():
     app = QApplication(sys.argv)
