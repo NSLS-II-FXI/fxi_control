@@ -8,7 +8,7 @@ from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSignal, pyqtSlot, QProcess, QTextCodec
 from PyQt5.QtWidgets import (QMainWindow, QFileDialog, QRadioButton, QApplication, QWidget, QFrame,
                              QLineEdit, QPlainTextEdit, QWidget, QPushButton, QLabel, QCheckBox, QGroupBox,
-                             QScrollBar, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget,
+                             QScrollBar, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QTextBrowser,
                              QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea,
                              QSlider, QComboBox, QButtonGroup, QMessageBox, QSizePolicy)
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QFont
@@ -36,103 +36,6 @@ from scan_list_pzt import fxi_load_scan_list_pzt
 global txm, CALIBER, scan_list
 scan_list = {}
 
-
-
-def motor_list(n=1):
-    motor1 = {}
-    motor2 = {}
-    motor3 = {}
-    motor4 = {}
-    motor5 = {}
-    motor6 = {}
-    motor7 = {}
-
-    try:
-        '''
-        motor1['XEng'] = XEng
-        motor1['beam_current'] = beam_current
-        motor1['zps.sx'] = zps.sx
-        motor1['zps.sy'] = zps.sy
-        motor1['zps.sz'] = zps.sz
-        motor1['zps.pi_r'] = zps.pi_r
-        motor1['DetU.x'] = DetU.x
-        motor1['DetU.y'] = DetU.y
-        motor1['DetU.z'] = DetU.z
-
-        motor2['clens.x'] = clens.x
-        motor2['clens.y1'] = clens.y1
-        motor2['clens.y2'] = clens.y2
-        motor2['clens.z1'] = clens.z1
-        motor2['clens.z2'] = clens.z2
-        motor2['clens.p'] = clens.p
-        motor2['zp.x'] = zp.x
-        motor2['zp.y'] = zp.y
-        motor2['zp.z'] = zp.z
-        motor2['aper.x'] = aper.x
-        motor2['aper.y'] = aper.y
-        motor2['aper.z'] = aper.z
-        '''
-        motor3['ssa.v_gap'] = ssa.v_gap
-        motor3['ssa.v_ctr'] = ssa.v_ctr
-        motor3['ssa.h_gap'] = ssa.h_gap
-        motor3['ssa.h_ctr'] = ssa.h_ctr
-        #motor3['filter1'] = filter1
-        #motor3['filter2'] = filter2
-        #motor3['filter3'] = filter3
-        #motor3['filter4'] = filter4
-        #newly added:
-        motor3['ic3'] = ic3
-        motor3['ic4'] = ic4
-
-        motor4['cm.x'] = cm.x
-        motor4['cm.yaw'] = cm.yaw
-        motor4['cm.y'] = cm.y
-        motor4['cm.p'] = cm.p
-        motor4['cm.r'] = cm.r
-        motor4['tm.x'] = tm.x
-        motor4['tm.yaw'] = tm.yaw
-        motor4['tm.y'] = tm.y
-        motor4['tm.p'] = tm.p
-        motor4['tm.r'] = tm.r
-
-        motor5['pbsl.x_gap'] = pbsl.x_gap
-        motor5['pbsl.x_ctr'] = pbsl.x_ctr
-        motor5['pbsl.y_gap'] = pbsl.y_gap
-        motor5['pbsl.y_ctr'] = pbsl.y_ctr
-        #motor5['dcm.eng'] = dcm.eng
-        motor5['dcm.th1'] = dcm.th1
-        #motor5['dcm.th2'] = dcm.th2
-        motor5['dcm.dy2'] = dcm.dy2
-        #motor5['dcm.chi2'] = dcm.chi2
-        motor5['pzt_cm_loadcell'] = pzt_cm_loadcell
-        motor5['pzt_tm_loadcell'] = pzt_tm_loadcell
-
-        #motor6['pzt_dcm_chi2.pos'] = pzt_dcm_chi2.pos
-        #motor6['pzt_dcm_th2.pos'] = pzt_dcm_th2.pos       
-
-        #motor7['ic3'] = ic3
-        #motor7['ic4'] = ic4
-    except Exception as err:
-        print(err)
-
-    if n == 1:
-        return motor1
-    elif n == 2:
-        return motor2
-    elif n == 3:
-        return motor3
-    elif n == 4:
-        return motor4
-    elif n == 5:
-        return motor5
-    elif n == 6:
-        return motor6
-    elif n == 7:
-        return motor7
-    else:
-        return 0
-
-
 def make_jupyter_widget_with_kernel():
     """Start a kernel, connect to it, and create a RichJupyterWidget to use it
     """
@@ -147,6 +50,34 @@ def make_jupyter_widget_with_kernel():
     jupyter_widget.kernel_client = kernel_client
     return jupyter_widget
 
+class OutputWrapper(QObject):
+    outputWritten = QtCore.pyqtSignal(object, object)
+    def __init__(self, parent, stdout=True):
+        super().__init__(parent)
+        if stdout:
+            self._stream = sys.stdout
+            sys.stdout = self
+        else:
+            self._stream = sys.stderr
+            sys.stderr = self
+        self._stdout = stdout
+
+    def write(self, text):
+        self._stream.write(text)
+        self.outputWritten.emit(text, self._stdout)
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+    def __del__(self):
+        import sys
+        try:
+            if self._stdout:
+                sys.stdout = self._stream
+            else:
+                sys.stderr = self._stream
+        except AttributeError:
+            pass
 
 class Stream(QtCore.QObject):
     newText = QtCore.pyqtSignal(str)
@@ -163,10 +94,7 @@ class ConsoleWidget(RichIPythonWidget):
 
         if customBanner is not None:
             self.banner = customBanner
-
-        #self.set_default_style('linux')
-        #self.font_size = 20
- 
+     
         self.kernel_manager = QtInProcessKernelManager()
         self.kernel_manager.start_kernel(show_banner=False)
 
@@ -182,11 +110,9 @@ class ConsoleWidget(RichIPythonWidget):
         #kernel.shell.safe_execfile(fn, kernel.shell.user_global_ns)  
         #print(fn)
         
-        '''
         self.set_default_style('linux')
-        self.font = QtGui.QFont(self.font.family(), 16);
-        '''
-        
+        #self.font = QtGui.QFont(self.font.family(), 16);
+                
         def stop():
             self.kernel_client.stop_channels()
             self.kernel_manager.shutdown_kernel()
@@ -224,7 +150,6 @@ class ConsoleWidget(RichIPythonWidget):
         Execute a command in the frame of the console widget
         """
         self._execute(command, False)
-
 
 class Get_motor_reading(QThread):
     current_position = pyqtSignal(float)
@@ -280,26 +205,26 @@ class Shutter():
 
 
     def pb_open_shutter(self):
-        self.obj.open_shutter = FixButton(self.font2, 'Open shutter', 120, 40)
+        self.obj.open_shutter = FixObj(QPushButton, self.font2, 'Open shutter', 120, 40).run()
         return self.obj.open_shutter
 
     def pb_close_shutter(self):
-        self.obj.close_shutter = FixButton(self.font2, 'Close shutter', 120, 40)
+        self.obj.close_shutter = FixObj(QPushButton, self.font2, 'Close shutter', 120, 40).run()
         return self.obj.close_shutter
 
     def lb_beam_current(self):
-        self.obj.lb_beam_current = FixLabel(self.font1, '', 120)
+        self.obj.lb_beam_current = FixObj(QLabel, self.font1, '', 120).run()
         self.obj.lb_beam_current.setStyleSheet('color: rgb(200, 50, 50);')
         return self.obj.lb_beam_current
 
     def lb_shutter_status(self):
-        self.obj.lb_shutter_status = FixLabel(self.font1, '', 120)
+        self.obj.lb_shutter_status = FixObj(QLabel, self.font1, '', 120).run()
         self.obj.lb_shutter_status.setStyleSheet('color: rgb(200, 50, 50);')
         return self.obj.lb_shutter_status
 
     def layout(self):
-        lb_beam = FixLabel(self.font1, 'Beam current:', 120)
-        lb_shutter = FixLabel(self.font1, 'Shutter status:', 120)
+        lb_beam = FixObj(QLabel, self.font1, 'Beam current:', 120).run()
+        lb_shutter = FixObj(QLabel, self.font1, 'Shutter status:', 120).run()
 
         hbox_beam = QHBoxLayout()
         hbox_beam.addWidget(lb_beam)
@@ -387,56 +312,32 @@ class Motor_base():
         self.button_step_minus.clicked.connect(lambda: self.fun_move_plus_minus('minus'))   
    
     def tx_editor_setpos(self):
-        self.obj.tx_setpos = QLineEdit()
-        self.obj.tx_setpos.setFont(self.font2)
-        self.obj.tx_setpos.setText('0')
-        self.obj.tx_setpos.setFixedWidth(80)
+        self.obj.tx_setpos = FixObj(QLineEdit, self.font2, '0', 80).run()
         self.obj.tx_setpos.setValidator(QDoubleValidator())
         return self.obj.tx_setpos
     
     def lb_label_motor_pos(self):
-        self.obj.lb_motor_pos = QLabel()
-        self.obj.lb_motor_pos.setFixedWidth(80)
-        self.obj.lb_motor_pos.setFont(self.font2)
-        #self.obj.lb_motor_pos.setAlignment(QtCore.Qt.AlignVCenter)
+        self.obj.lb_motor_pos = FixObj(QLabel, self.font2, '', 80).run()
         return self.obj.lb_motor_pos
 
     def pb_button_step_plus(self):
-        self.obj.pb_motor_plus = QPushButton('+')
-        self.obj.pb_motor_plus.setFixedWidth(40)
-        self.obj.pb_motor_plus.setFont(self.font2)
+        self.obj.pb_motor_plus = FixObj(QPushButton, self.font2, '+', 40).run()
         return self.obj.pb_motor_plus
     
     def pb_button_step_minus(self):
-        self.obj.pb_motor_minus = QPushButton('-')
-        self.obj.pb_motor_minus.setFixedWidth(40)
-        self.obj.pb_motor_minus.setFont(self.font2)
+        self.obj.pb_motor_minus = FixObj(QPushButton, self.font2, '-', 40).run()
         return self.obj.pb_motor_minus
         
     def tx_editor_step_size(self):
-        self.obj.tx_step = QLineEdit()
-        self.obj.tx_step.setFont(self.font2)
-        self.obj.tx_step.setFixedWidth(60)
+        self.obj.tx_step = FixObj(QLineEdit, self.font2, '', 60).run()
         self.obj.tx_step.setValidator(QDoubleValidator(decimals=3))  
         return self.obj.tx_step
 
     def lb_unit(self):
-        lb_unit1 = QLabel()
-        lb_unit1.setText(self.unit)
-        lb_unit1.setFont(self.font2)
-        lb_unit1.setFixedWidth(50)
-        lb_unit2 = QLabel()
-        lb_unit2.setText(self.unit)
-        lb_unit2.setFont(self.font2)
-        lb_unit2.setFixedWidth(50)
-        lb_unit3 = QLabel()
-        lb_unit3.setText(self.unit)
-        lb_unit3.setFont(self.font2)
-        lb_unit3.setFixedWidth(30)
-        lb_unit4 = QLabel()
-        lb_unit4.setText(self.unit)
-        lb_unit4.setFont(self.font2)
-        lb_unit4.setFixedWidth(30)
+        lb_unit1 = FixObj(QLabel, self.font2, self.unit, 50).run()
+        lb_unit2 = FixObj(QLabel, self.font2, self.unit, 50).run()
+        lb_unit3 = FixObj(QLabel, self.font2, self.unit, 30).run()
+        lb_unit4 = FixObj(QLabel, self.font2, self.unit, 30).run()
         return [lb_unit1, lb_unit2, lb_unit3, lb_unit4]
 
     def fun_check_pos_limit(self):
@@ -520,9 +421,6 @@ class Motor_layout(Motor_base):
 
     def init_connect_function_motor(self): 
         self.button_reset_reading.clicked.connect(self.fun_reset_reading)
-        #if self.with_feedback:
-        
-        #    self.button_feedback.clicked.connect(self.fun_enable_feedback)
      
     def init_pos_display_motor(self):
         current_pos = self.mot.position
@@ -533,15 +431,11 @@ class Motor_layout(Motor_base):
         self.editor_step_size.setText('0')
 
     def pb_button_reset_reading(self):
-        self.obj.pb_set_read = QPushButton('Reset to:')
-        self.obj.pb_set_read.setFixedWidth(110)
-        self.obj.pb_set_read.setFont(self.font2)
+        self.obj.pb_set_read = FixObj(QPushButton, self.font2, 'Reset to:', 110).run()
         return self.obj.pb_set_read
 
     def tx_editor_reset_reading(self):
-        self.obj.tx_set_read = QLineEdit()
-        self.obj.tx_set_read.setFixedWidth(75)
-        self.obj.tx_set_read.setFont(self.font2)
+        self.obj.tx_set_read = FixObj(QLineEdit, self.font2, '', 75).run()
         self.obj.tx_set_read.setValidator(QDoubleValidator()) 
         return self.obj.tx_set_read
 
@@ -557,12 +451,9 @@ class Motor_layout(Motor_base):
         #self.label_motor_pos.setText(f'{val:4.4f}')
 
     def layout(self):
-        lb_empty = QLabel()
-        lb_empty.setFixedWidth(10)
-        lb_motor = QLabel()
-        lb_motor.setFixedWidth(75)
-        lb_motor.setText(self.motor_label + ':')
-        lb_motor.setFont(self.font1)
+        lb_empty = FixObj(QLabel, None, '', 10).run()
+        
+        lb_motor = FixObj(QLabel, self.font1, self.motor_label + ':', 75).run()
         lb_motor.setAlignment(QtCore.Qt.AlignVCenter)
         lb_unit = self.lb_unit()
 
@@ -613,12 +504,9 @@ class PZT_th2_chi2(Motor_layout):
         caput(pv, val)
 
     def layout(self):
-        lb_empty = QLabel()
-        lb_empty.setFixedWidth(10)
-        lb_motor = QLabel()
-        lb_motor.setFixedWidth(75)
-        lb_motor.setText(self.motor_label + ':')
-        lb_motor.setFont(self.font1)
+        lb_empty = FixObj(QLabel, None, '', 10).run()
+
+        lb_motor = FixObj(QLabel, self.font1, self.motor_label+':', 75).run()
         lb_motor.setAlignment(QtCore.Qt.AlignVCenter)
         lb_unit = self.lb_unit()
 
@@ -634,8 +522,6 @@ class PZT_th2_chi2(Motor_layout):
         hbox.addWidget(lb_unit[2])
         hbox.addWidget(self.button_step_plus)
         hbox.addWidget(lb_empty)
-
-        #hbox.addWidget(lb_unit[3])
         hbox.setAlignment(QtCore.Qt.AlignLeft)
         return hbox
 
@@ -703,25 +589,18 @@ class DCM_th2_chi2(Motor_layout):
             RE(mv(self.mot.feedback, set_feedback_val))
 
     def pb_button_feedback_enable(self):
-        self.obj.pb_button_feedback_enable = QPushButton('Feedback On')
-        self.obj.pb_button_feedback_enable.setFixedWidth(110)
-        self.obj.pb_button_feedback_enable.setFont(self.font2)
+        self.obj.pb_button_feedback_enable = FixObj(QPushButton, self.font2, 'Feedback On', 110).run()
         return self.obj.pb_button_feedback_enable
 
     def tx_editor_feedback_val(self):
-        self.obj.tx_feedback_val = QLineEdit()
-        self.obj.tx_feedback_val.setFixedWidth(75)
-        self.obj.tx_feedback_val.setFont(self.font2)
+        self.obj.tx_feedback_val = FixObj(QLineEdit, self.font2, '', 75).run()
         self.obj.tx_feedback_val.setValidator(QDoubleValidator()) 
         return self.obj.tx_feedback_val
 
     def layout(self):
         lb_empty = QLabel()
         lb_empty.setFixedWidth(10)
-        lb_motor = QLabel()
-        lb_motor.setFixedWidth(75)
-        lb_motor.setText(self.motor_label + ':')
-        lb_motor.setFont(self.font1)
+        lb_motor = FixObj(QLabel, self.font1, self.motor_label + ':', 75).run()
         lb_motor.setAlignment(QtCore.Qt.AlignVCenter)
         lb_unit = self.lb_unit()
 
@@ -740,7 +619,6 @@ class DCM_th2_chi2(Motor_layout):
 
         hbox.addWidget(self.button_feedback_enable)
         hbox.addWidget(self.editor_feedback_val)
-        #hbox.addWidget(lb_unit[3])
         hbox.setAlignment(QtCore.Qt.AlignLeft)
         return hbox
 
@@ -762,19 +640,12 @@ class Sample_motor_layout(Motor_layout):
             pass  
     
     def lb_pos_limit(self):
-        self.obj.lb_limit = QLabel()
-        self.obj.lb_limit.setFixedWidth(140)
-        self.obj.lb_limit.setText('(-4000, 4000)')
-        self.obj.lb_limit.setFont(self.font2)
+        self.obj.lb_limit = FixObj(QLabel, self.font2, '(-4000, 4000)', 140).run()
         return self.obj.lb_limit 
 
     def layout(self):
-        lb_empty = QLabel()
-        lb_empty.setFixedWidth(10)
-        lb_motor = QLabel()
-        lb_motor.setFixedWidth(75)
-        lb_motor.setText(self.motor_label + ':')
-        lb_motor.setFont(self.font1)
+        lb_empty = FixObj(QLabel, None, '', 10).run()
+        lb_motor = FixObj(QLabel, self.font1, self.motor_label + ':', 75).run()
         lb_unit = self.lb_unit()
 
         hbox = QHBoxLayout()
@@ -783,15 +654,12 @@ class Sample_motor_layout(Motor_layout):
         hbox.addWidget(lb_unit[0])
         hbox.addWidget(self.editor_setpos)
         hbox.addWidget(lb_unit[1])
-
         hbox.addWidget(self.label_lb_pos_limit)
-
         hbox.addWidget(self.button_step_minus)
         hbox.addWidget(self.editor_step_size)
         hbox.addWidget(lb_unit[2])
         hbox.addWidget(self.button_step_plus)
         hbox.addWidget(lb_empty)
-
         hbox.setAlignment(QtCore.Qt.AlignLeft)
         return hbox
 
@@ -801,19 +669,13 @@ class XEng_motor_layout(Motor_layout):
         self.label_eng_calib = self.lb_eng_calib()
 
     def lb_eng_calib(self):
-        self.obj.lb_eng_calib = QLabel()
-        self.obj.lb_eng_calib.setFixedWidth(300)
-        self.obj.lb_eng_calib.setText('(calib. energy)')
-        self.obj.lb_eng_calib.setFont(self.font2)
+        self.obj.lb_eng_calib = FixObj(QLabel, self.font2, '(calib. energy)', 300).run()
         return self.obj.lb_eng_calib
 
     def layout(self):
         lb_empty = QLabel()
         lb_empty.setFixedWidth(10)
-        lb_motor = QLabel()
-        lb_motor.setFixedWidth(75)
-        lb_motor.setText(self.motor_label + ':')
-        lb_motor.setFont(self.font1)
+        lb_motor = FixObj(QLabel, self.font1, self.motor_label + ':', 75).run()
         lb_unit = self.lb_unit()
 
         hbox = QHBoxLayout()
@@ -851,25 +713,15 @@ class Filter_layout():
         self.obj.pb_filter_in.clicked.connect(lambda: self.fun_click_filter('In'))
          
     def lb_label_filter(self):
-        self.obj.lb_filter = QLabel()
-        self.obj.lb_filter.setText(self.motor_label)
-        self.obj.lb_filter.setFont(self.font2)
-        self.obj.lb_filter.setFixedHeight(40)
-        self.obj.lb_filter.setFixedWidth(120)
+        self.obj.lb_filter = FixObj(QLabel, self.font2, self.motor_label, 120, 40).run()
         return self.obj.lb_filter
 
     def pb_button_filter_in(self):
-        self.obj.pb_filter_in = QPushButton('In')
-        self.obj.pb_filter_in.setFixedHeight(40)
-        self.obj.pb_filter_in.setFixedWidth(40)
-        self.obj.pb_filter_in.setFont(self.font2)
+        self.obj.pb_filter_in = FixObj(QPushButton, self.font2, 'In', 40, 40).run()
         return self.obj.pb_filter_in
 
     def pb_button_filter_out(self):
-        self.obj.pb_filter_out = QPushButton('Out')
-        self.obj.pb_filter_out.setFixedHeight(40)
-        self.obj.pb_filter_out.setFixedWidth(40)
-        self.obj.pb_filter_out.setFont(self.font2)
+        self.obj.pb_filter_out = FixObj(QPushButton, self.font2, 'Out', 40, 40).run()
         self.obj.pb_filter_out.clicked.connect(lambda: self.fun_click_filter('Out'))
         return self.obj.pb_filter_out
 
@@ -903,53 +755,25 @@ class Filter_layout():
         hbox.setAlignment(QtCore.Qt.AlignLeft)
         hbox.addStretch()
         return hbox
-        
-class FixLabel(QLabel):
-    def __init__(self, font=None, name='', width=0, height=0):
+
+class FixObj():
+    def __init__(self, def_widget, font=None, name='', width=0, height=0):
         super().__init__()
         self.w = width
         self.h = height
         self.font = font
         self.name = name
-        #self.Label = QLabel()
+        self.obj = def_widget()
         if self.w > 0:
-            self.setFixedWidth(self.w)
+            self.obj.setFixedWidth(self.w)
         if self.h > 0:
-            self.setFixedHeight(self.h)
+            self.obj.setFixedHeight(self.h)
         if not (self.font is None):
-            self.setFont(self.font)
-            self.setText(name)
-        self.setText(self.name)
-
-class FixEditor(QLineEdit):
-    def __init__(self, font=None, name='', width=0, height=0):
-        super().__init__()
-        self.w = width
-        self.h = height
-        self.font = font
-        self.name = name        
-        if self.w > 0:
-            self.setFixedWidth(self.w)
-        if self.h > 0:
-            self.setFixedHeight(self.h)
-        if not (self.font is None):
-             self.setFont(self.font)
-        self.setText(self.name)
-
-class FixButton(QPushButton):
-    def __init__(self, font=None, name='', width=0, height=0):
-        super().__init__()
-        self.w = width
-        self.h = height
-        self.font = font
-        self.name = name        
-        if self.w > 0:
-            self.setFixedWidth(self.w)
-        if self.h > 0:
-            self.setFixedHeight(self.h)
-        if not (self.font is None):
-             self.setFont(self.font)
-        self.setText(self.name)
+            self.obj.setFont(self.font)
+        if hasattr(self.obj, 'setText'):
+            self.obj.setText(self.name)
+    def run(self):
+        return self.obj
 
 class App(QWidget):
     def __init__(self):
@@ -961,11 +785,25 @@ class App(QWidget):
         self.height = 800
         self.left = (width - self.width) // 2
         self.top = (height - self.height) // 2
+
+        self._err_color = QtCore.Qt.red
+        stdout = OutputWrapper(self, True)
+        stdout.outputWritten.connect(self.handleOutput)
+        stderr = OutputWrapper(self, False)
+        stderr.outputWritten.connect(self.handleOutput) 
+
         self.initUI()
         self.global_sync()
         #self.beam_shutter_sync()
         self.display_calib_eng_only()
         self.enable_reset_reading()
+
+    def handleOutput(self, text, stdout):
+        color = self.terminal.textColor()
+        self.terminal.moveCursor(QtGui.QTextCursor.End)
+        self.terminal.setTextColor(color if stdout else self._err_color)
+        self.terminal.insertPlainText(text)
+        self.terminal.setTextColor(color)
 
     def global_sync(self):
         self.threads = []
@@ -1000,7 +838,7 @@ class App(QWidget):
         grid = QGridLayout()
   
         grid.addWidget(self.layout_motor(), 0, 1)
-        grid.addWidget(self.layout_instruction(), 1, 1)
+        #grid.addWidget(self.layout_instruction(), 1, 1)
         grid.addWidget(self.layout_scan(), 2, 1)
         # grid.addLayout(gpbox_msg, 1, 1)
         # grid.addWidget(gpbox_xanes, 2, 1)
@@ -1010,7 +848,7 @@ class App(QWidget):
         layout.addStretch()
         layout.setAlignment(QtCore.Qt.AlignTop)
         self.setLayout(layout)
-        #self.pos_sync()
+        self.pos_sync()
 
     def layout_instruction(self):
         gpbox = QGroupBox()
@@ -1036,12 +874,12 @@ class App(QWidget):
         return gpbox
 
     def layout_motor(self):
-        lb_empty = QLabel()
-        lb_empty.setFixedWidth(40)
-        lb_empty1 = QLabel()
-        lb_empty1.setFixedWidth(40)
-        lb_empty2 = QLabel()
-        lb_empty2.setFixedWidth(40)
+        lb_empty = FixObj(QLabel, None, '', 40).run()
+        
+        lb_empty1 = FixObj(QLabel, None, '', 40).run()
+        
+        lb_empty2 = FixObj(QLabel, None, '', 40).run()
+        
         gpbox = QGroupBox('Sample position')
         gpbox.setFont(self.font1)
         #gpbox.setStyleSheet('color: rgb(0, 80, 255);')
@@ -1088,19 +926,12 @@ class App(QWidget):
         return vbox
 
     def vbox_motor_pos(self):
-        lb_title = QLabel()
-        lb_title.setFixedWidth(120)
-        lb_title.setText('TXM motors')
-        lb_title.setFont(self.font1)
+        lb_title = FixObj(QLabel, self.font1, 'TXM motors', 120).run()
 
-        self.pb_pos_sync = QPushButton('Sync. CSS pos. / update energy calib.')
-        self.pb_pos_sync.setFixedWidth(350)
-        self.pb_pos_sync.setFont(self.font2)
+        self.pb_pos_sync = FixObj(QPushButton, self.font2, 'Update energy calib.', 350).run()
         self.pb_pos_sync.clicked.connect(self.pos_sync)
 
-        self.pb_reset_rot_speed = QPushButton('Reset rotation speed to 30 deg/s')
-        self.pb_reset_rot_speed.setFixedWidth(350)
-        self.pb_reset_rot_speed.setFont(self.font2)
+        self.pb_reset_rot_speed = FixObj(QPushButton, self.font2, 'Reset rotation speed to 30 deg/s', 350).run()
         self.pb_reset_rot_speed.clicked.connect(self.reset_r_speed)
 
         hbox = QHBoxLayout()
@@ -1108,12 +939,6 @@ class App(QWidget):
         hbox.addWidget(self.pb_reset_rot_speed)
         hbox.addStretch()
         hbox.setAlignment(QtCore.Qt.AlignLeft)
-        # need to re-structure
-        #layout_motor_x = self.hbox_motor_x()
-        #layout_motor_y = self.hbox_motor_y()
-        #layout_motor_z = self.hbox_motor_z()
-        #layout_motor_r = self.hbox_motor_r()
-        #layout_motor_e = self.hbox_motor_e()
         
         vbox_motor_pos = QVBoxLayout()
         vbox_motor_pos.addWidget(lb_title)
@@ -1122,153 +947,22 @@ class App(QWidget):
         vbox_motor_pos.addLayout(hbox)
         vbox_motor_pos.setAlignment(QtCore.Qt.AlignTop)
         return vbox_motor_pos
-    '''
-    def vbox_motor_step(self):
-        lb_title = QLabel()
-        lb_title.setFixedWidth(200)
-        lb_title.setText('step size (x, y, z)')
-        lb_title.setFont(self.font1)
-        lb_title2 = QLabel()
-        lb_title2.setFixedWidth(80)
-        lb_title2.setText('     r step')
-        lb_title2.setFont(self.font2)
-
-        self.rd_step_10nm = QRadioButton('10 nm')
-        self.rd_step_10nm.setFixedWidth(80)
-        self.rd_step_10nm.setFont(self.font2)
-        self.rd_step_100nm = QRadioButton('100 nm')
-        self.rd_step_100nm.setFixedWidth(80)
-        self.rd_step_100nm.setFont(self.font2)
-        self.rd_step_1um = QRadioButton('1 um')
-        self.rd_step_1um.setFixedWidth(80)
-        self.rd_step_1um.setFont(self.font2)
-        self.rd_step_5um = QRadioButton('5 um')
-        self.rd_step_5um.setFixedWidth(80)
-        self.rd_step_5um.setFont(self.font2)
-        self.rd_step_20um = QRadioButton('20 um')
-        self.rd_step_20um.setFixedWidth(80)
-        self.rd_step_20um.setFont(self.font2)
-        self.rd_step_50um = QRadioButton('50 um')
-        self.rd_step_50um.setFixedWidth(80)
-        self.rd_step_50um.setFont(self.font2)
-        self.rd_step_200um = QRadioButton('200 um')
-        self.rd_step_200um.setFixedWidth(80)
-        self.rd_step_200um.setFont(self.font2)
-        self.rd_step_1mm = QRadioButton('1 mm')
-        self.rd_step_1mm.setFixedWidth(80)
-        self.rd_step_1mm.setFont(self.font2)
-        self.rd_step_custom = QRadioButton('custom')
-        self.rd_step_custom.setFixedWidth(80)
-        self.rd_step_custom.setFont(self.font2)
-
-        self.rd_step_20um.setChecked(True)
-
-        self.tx_step_custom = QLineEdit()
-        self.tx_step_custom.setFont(self.font2)
-        self.tx_step_custom.setText('100')
-        self.tx_step_custom.setFixedWidth(60)
-        self.tx_step_custom.setValidator(QDoubleValidator())
-        lb_step_custom_unit = QLabel()
-        lb_step_custom_unit.setFont(self.font2)
-        lb_step_custom_unit.setText('um')
-        lb_step_custom_unit.setFixedWidth(80)
-
-        self.rd_rot_step_custom = QRadioButton('custom')
-        self.rd_rot_step_custom.setFixedWidth(80)
-        self.rd_rot_step_custom.setFont(self.font2)
-        self.tx_rot_step_custom = QLineEdit()
-        self.tx_rot_step_custom.setFont(self.font2)
-        self.tx_rot_step_custom.setText('90')
-        self.tx_rot_step_custom.setFixedWidth(60)
-        self.tx_rot_step_custom.setValidator(QDoubleValidator())
-        lb_rot_step_custom_unit = QLabel()
-        lb_rot_step_custom_unit.setFont(self.font2)
-        lb_rot_step_custom_unit.setText('deg')
-        lb_rot_step_custom_unit.setFixedWidth(80)
-
-        self.step_size_group = QButtonGroup()
-        self.step_size_group.setExclusive(True)
-        self.step_size_group.addButton(self.rd_step_10nm)
-        self.step_size_group.addButton(self.rd_step_100nm)
-        self.step_size_group.addButton(self.rd_step_1um)
-        self.step_size_group.addButton(self.rd_step_5um)
-        self.step_size_group.addButton(self.rd_step_20um)
-        self.step_size_group.addButton(self.rd_step_50um)
-        self.step_size_group.addButton(self.rd_step_200um)
-        self.step_size_group.addButton(self.rd_step_1mm)
-        self.step_size_group.addButton(self.rd_step_custom)
-
-        hbox_1 = QHBoxLayout()
-        hbox_1.addWidget(self.rd_step_10nm)
-        hbox_1.addWidget(self.rd_step_100nm)
-        hbox_1.setAlignment(QtCore.Qt.AlignLeft)
-        hbox_2 = QHBoxLayout()
-        hbox_2.addWidget(self.rd_step_1um)
-        hbox_2.addWidget(self.rd_step_5um)
-        hbox_2.setAlignment(QtCore.Qt.AlignLeft)
-        hbox_3 = QHBoxLayout()
-        hbox_3.addWidget(self.rd_step_20um)
-        hbox_3.addWidget(self.rd_step_50um)
-        hbox_3.setAlignment(QtCore.Qt.AlignLeft)
-        hbox_4 = QHBoxLayout()
-        hbox_4.addWidget(self.rd_step_200um)
-        hbox_4.addWidget(self.rd_step_1mm)
-        hbox_4.setAlignment(QtCore.Qt.AlignLeft)
-        hbox_5 = QHBoxLayout()
-        hbox_5.addWidget(self.rd_step_custom)
-        hbox_5.addWidget(self.tx_step_custom)
-        hbox_5.addWidget(lb_step_custom_unit)
-        hbox_5.setAlignment(QtCore.Qt.AlignLeft)
-        hbox_6 = QHBoxLayout()
-        hbox_6.addWidget(lb_title2)
-        hbox_6.addWidget(self.tx_rot_step_custom)
-        hbox_6.addWidget(lb_rot_step_custom_unit)
-        hbox_6.setAlignment(QtCore.Qt.AlignLeft)
-
-        vbox = QVBoxLayout()
-        vbox.addWidget(lb_title)
-        vbox.addLayout(hbox_1)
-        vbox.addLayout(hbox_2)
-        vbox.addLayout(hbox_3)
-        vbox.addLayout(hbox_4)
-        vbox.addLayout(hbox_5)
-        vbox.addLayout(hbox_6)
-        vbox.setAlignment(QtCore.Qt.AlignTop)
-        return vbox
-    '''
  
     def vbox_pos_select_for_scan(self):
-        lb_pos = QLabel()
-        lb_pos.setFixedWidth(200)
-        lb_pos.setText('Position used in scan')
-        lb_pos.setFont(self.font1)
+        lb_pos = FixObj(QLabel, self.font1, 'Position used in scan', 200).run()
         lb_pos.setStyleSheet('color: rgb(0, 80, 255)')
 
-        self.lst_scan_pos = QListWidget()
-        self.lst_scan_pos.setFixedWidth(100)
-        self.lst_scan_pos.setFixedHeight(120)
-        self.lst_scan_pos.setFont(self.font2)
+        self.lst_scan_pos = FixObj(QListWidget, self.font2, '', 100, 120).run()
 
-        self.pb_pos_rm_select = QPushButton('remove')
-        self.pb_pos_rm_select.setFixedWidth(100)
-        self.pb_pos_rm_select.setFont(self.font2)
+        self.pb_pos_rm_select = FixObj(QPushButton, self.font2, 'remove', 100).run()
         self.pb_pos_rm_select.clicked.connect(self.pos_remove_select)
 
-        self.pb_pos_rm_all_select = QPushButton('remove all')
-        self.pb_pos_rm_all_select.setFixedWidth(100)
-        self.pb_pos_rm_all_select.setFont(self.font2)
+        self.pb_pos_rm_all_select = FixObj(QPushButton, self.font2, 'remove all', 100).run()
         self.pb_pos_rm_all_select.clicked.connect(self.pos_remove_all_select)
 
-        lb_note1 = QLabel()
-        lb_note1.setText('1. if empty, use current pos.')
-        lb_note1.setFont(self.font2)
-        lb_note1.setFixedWidth(210)
-        lb_note1.setFixedHeight(30)
+        lb_note1 = FixObj(QLabel, self.font2, '1. if empty, use current pos.', 210, 30).run()
 
-        lb_note2 = QLabel()
-        lb_note2.setText('2. Bkg. is automatically added')
-        lb_note2.setFont(self.font2)
-        lb_note1.setFixedWidth(210)
+        lb_note2 = FixObj(QLabel, self.font2, '2. Bkg. is automatically added', 210, 30).run()
 
         vbox_select = QVBoxLayout()
         vbox_select.addWidget(self.pb_pos_rm_select)
@@ -1292,43 +986,23 @@ class App(QWidget):
        
 
     def vbox_pos_list(self):
-        lb_pos = QLabel()
-        lb_pos.setFixedWidth(160)
-        lb_pos.setText('Position saved')
-        lb_pos.setFont(self.font1)
+        lb_pos = FixObj(QLabel, self.font1,'Position saved', 160).run() 
 
-        lb_pos_x = QLabel()
-        lb_pos_x.setText('x:')
-        lb_pos_x.setFont(self.font2)
-        lb_pos_x.setFixedWidth(20)
-        self.lb_pos_x = QLabel()
-        self.lb_pos_x.setFont(self.font2)
-        self.lb_pos_x.setFixedWidth(75)
+        lb_pos_x = FixObj(QLabel, self.font2, 'x:', 20).run()
 
-        lb_pos_y = QLabel()
-        lb_pos_y.setText('y:')
-        lb_pos_y.setFont(self.font2)
-        lb_pos_y.setFixedWidth(20)
-        self.lb_pos_y = QLabel()
-        self.lb_pos_y.setFont(self.font2)
-        self.lb_pos_y.setFixedWidth(75)
+        self.lb_pos_x = FixObj(QLabel, self.font2, '', 75).run()
 
-        lb_pos_z = QLabel()
-        lb_pos_z.setText('z:')
-        lb_pos_z.setFont(self.font2)
-        lb_pos_z.setFixedWidth(20)
-        self.lb_pos_z = QLabel()
-        self.lb_pos_z.setText('')
-        self.lb_pos_z.setFont(self.font2)
-        self.lb_pos_z.setFixedWidth(75)
+        lb_pos_y = FixObj(QLabel, self.font2, 'y:', 20).run()
 
-        lb_pos_r = QLabel()
-        lb_pos_r.setText('r:')
-        lb_pos_r.setFont(self.font2)
-        lb_pos_r.setFixedWidth(20)
-        self.lb_pos_r = QLabel()
-        self.lb_pos_r.setFont(self.font2)
-        self.lb_pos_r.setFixedWidth(75)
+        self.lb_pos_y = FixObj(QLabel, self.font2, '', 75).run()
+
+        lb_pos_z = FixObj(QLabel, self.font2, 'z:', 20).run()
+
+        self.lb_pos_z = FixObj(QLabel, self.font2, '', 75).run()
+
+        lb_pos_r = FixObj(QLabel, self.font2, 'r:', 20).run()
+        
+        self.lb_pos_r = FixObj(QLabel, self.font2, '', 75).run()
 
         hbox_pos1 = QHBoxLayout()
         hbox_pos1.addWidget(lb_pos_x)
@@ -1344,49 +1018,30 @@ class App(QWidget):
         hbox_pos2.addWidget(self.lb_pos_r)
         hbox_pos2.setAlignment(QtCore.Qt.AlignLeft)
 
-        self.lst_pos = QListWidget()
-        self.lst_pos.setFixedWidth(100)
-        self.lst_pos.setFixedHeight(180)
-        self.lst_pos.setFont(self.font2)
+        self.lst_pos = FixObj(QListWidget, self.font2, '', 100, 180).run()
         self.lst_pos.itemClicked.connect(self.show_pos_clicked)
         self.lst_pos.setSelectionMode(QAbstractItemView.SingleSelection)
 
-        self.pb_pos_rec = QPushButton('record')
-        self.pb_pos_rec.setFixedWidth(100)
-        self.pb_pos_rec.setFont(self.font2)
+        self.pb_pos_rec = FixObj(QPushButton, self.font2, 'record', 100).run()
         self.pb_pos_rec.clicked.connect(self.pos_record)
 
-        self.pb_pos_out = QPushButton('bkg. pos')
-        self.pb_pos_out.setFixedWidth(100)
-        self.pb_pos_out.setFont(self.font2)
+        self.pb_pos_out = FixObj(QPushButton, self.font2, 'bkg. pos', 100).run()
         self.pb_pos_out.clicked.connect(self.pos_record_bkg)
 
-        self.pb_pos_rm = QPushButton('remove')
-        self.pb_pos_rm.setFixedWidth(100)
-        self.pb_pos_rm.setFont(self.font2)
-        self.pb_pos_rm.clicked.connect(self.pos_remove)
+        self.pb_pos_rm = FixObj(QPushButton, self.font2, 'remove', 100).run()
 
-        self.pb_pos_rm_all = QPushButton('remove all')
-        self.pb_pos_rm_all.setFixedWidth(100)
-        self.pb_pos_rm_all.setFont(self.font2)
+        self.pb_pos_rm_all = FixObj(QPushButton, self.font2, 'remove all', 100).run()
         self.pb_pos_rm_all.clicked.connect(self.pos_remove_all)
 
-        self.pb_pos_update = QPushButton('update')
-        self.pb_pos_update.setFixedWidth(100)
-        self.pb_pos_update.setFont(self.font2)
+        self.pb_pos_update = FixObj(QPushButton, self.font2, 'update', 100).run()
         self.pb_pos_update.clicked.connect(self.pos_update)
 
-        self.pb_pos_go = QPushButton('Go To')
-        self.pb_pos_go.setFixedWidth(100)
-        self.pb_pos_go.setFont(self.font2)
+        self.pb_pos_go = FixObj(QPushButton, self.font2, 'Go To', 100).run()
         self.pb_pos_go.clicked.connect(self.pos_go_to)
 
-        self.pb_pos_select = QPushButton('select for scan --->')
-        self.pb_pos_select.setFixedWidth(205)
-        self.pb_pos_select.setFont(self.font2)
+        self.pb_pos_select = FixObj(QPushButton, self.font2, 'select for scan --->', 205).run()
         self.pb_pos_select.setStyleSheet('color: rgb(0, 80, 255)')
         self.pb_pos_select.clicked.connect(self.pos_select_for_scan)
-
 
         hbox1 = QHBoxLayout()
         hbox1.addWidget(self.pb_pos_rec)
@@ -1469,31 +1124,23 @@ class App(QWidget):
         return gpbox
 
     def layout_pre_defined_scan(self):
-        lb_empty = QLabel()
-        lb_space1 = QLabel()
-        lb_space1.setFixedWidth(20)
+        lb_empty = FixObj(QLabel).run()
 
-        lb_space2 = QLabel()
-        lb_space2.setFixedWidth(10)
+        lb_space1 = FixObj(QLabel, None, '', 20).run()
 
-        lb_space3 = QLabel()
-        lb_space3.setFixedWidth(10)
+        lb_space2 = FixObj(QLabel, None, '', 10).run()
 
-        lb_space4 = QLabel()
-        lb_space4.setFixedWidth(10)
+        lb_space3 = FixObj(QLabel, None, '', 10).run()
 
-        lb_space5 = QLabel()
-        lb_space5.setFixedWidth(10)
+        lb_space4 = FixObj(QLabel, None, '', 10).run()
 
-        lb_space6 = QLabel()
-        lb_space6.setFixedWidth(10)
+        lb_space5 = FixObj(QLabel, None, '', 10).run()
 
-        lb_v_space1 = QLabel()
-        lb_v_space1.setFixedHeight(10)
+        lb_space6 = FixObj(QLabel, None, '', 10).run()
 
-        sep = QLabel()
-        sep.setFixedWidth(10)
-        sep.setFixedHeight(180)
+        lb_v_space1 = FixObj(QLabel, None, '', 10).run()
+
+        sep = FixObj(QLabel, None, '', 10, 180).run()
         #sep.setStyleSheet('background-color: rgb(0, 80, 255);')
         sep.setStyleSheet('background-color: rgb(0, 80, 255);')
 
@@ -1522,11 +1169,17 @@ class App(QWidget):
         hbox_scan.setAlignment(QtCore.Qt.AlignLeft)
         hbox_scan.addStretch()
 
+
+        self.terminal = FixObj(QTextBrowser, self.font2, '', 0, 200).run()
+
         vbox_scan = QVBoxLayout()
         vbox_scan.addLayout(hbox_scan)
         vbox_scan.addWidget(lb_v_space1)
         vbox_scan.addLayout(scan_arg)
         vbox_scan.addLayout(scan_cmd)
+
+        vbox_scan.addWidget(self.terminal)
+
         vbox_scan.addWidget(lb_empty)
         # vbox_scan.addLayout(custom_script)
         vbox_scan.setAlignment(QtCore.Qt.AlignTop)
@@ -1534,8 +1187,9 @@ class App(QWidget):
 
         return vbox_scan
 
+
     def hbox_scan_cmd(self):
-        lb_sep = FixLabel(self.font2, '', 0, 30)
+        lb_sep = FixObj(QLabel, self.font2, '', 0, 30).run()
         hbox = QHBoxLayout()
         hbox.addLayout(self.vbox_run_scan())
         hbox.addWidget(lb_sep)
@@ -1545,25 +1199,10 @@ class App(QWidget):
         return hbox
 
     def vbox_ipython(self):
-        lb_ipython_msg1 = QLabel()
-        lb_ipython_msg1.setFont(self.font1)
-        lb_ipython_msg1.setFixedWidth(320)        
-        lb_ipython_msg1.setText('To initiate environment, run command:')
-
-        lb_ipython_msg2 = QLabel()
-        lb_ipython_msg2.setFont(self.font1)
-        lb_ipython_msg2.setFixedWidth(320)
-        lb_ipython_msg2.setText('Before first scan here, update scan-id:')
-
-        tx_ipython_msg1 = QLineEdit()
-        tx_ipython_msg1.setFont(self.font2)
-        tx_ipython_msg1.setFixedWidth(570)
-        tx_ipython_msg1.setText('%run -i /nsls2/data/fxi-new/shared/software/fxi_control/load_base.py')
-
-        tx_ipython_msg2 = QLineEdit()
-        tx_ipython_msg2.setFont(self.font2)
-        tx_ipython_msg2.setFixedWidth(570)
-        tx_ipython_msg2.setText('RE.md["scan_id"] = db[-1].start["scan_id"]')
+        lb_ipython_msg1 = FixObj(QLabel, self.font1, 'To initiate environment, run command:', 320).run()
+        lb_ipython_msg2 = FixObj(QLabel, self.font1, 'Before first scan here, update scan-id:', 320).run()
+        tx_ipython_msg1 = FixObj(QLineEdit, self.font2, '%run -i /nsls2/data/fxi-new/shared/software/fxi_control/load_base.py', 570).run()
+        tx_ipython_msg2 = FixObj(QLineEdit, self.font2, 'RE.md["scan_id"] = db[-1].start["scan_id"]', 570).run()
 
         hbox_ipython1 = QHBoxLayout()
         hbox_ipython1.addWidget(lb_ipython_msg1)
@@ -1591,15 +1230,8 @@ class App(QWidget):
         return vbox2
 
     def vbox_run_scan(self):
-        self.lb_scan_msg = QLabel()
-        self.lb_scan_msg.setFixedWidth(500)
-        self.lb_scan_msg.setText("Scan command / Message:")
-        self.lb_scan_msg.setFixedHeight(30)
-
-        self.tx_scan_msg = QPlainTextEdit()
-        self.tx_scan_msg.setFixedWidth(840)
-        self.tx_scan_msg.setFixedHeight(260)
-        self.tx_scan_msg.setFont(self.font3)
+        self.lb_scan_msg = FixObj(QLabel, None, "Scan command / Message:", 500, 30).run()
+        self.tx_scan_msg = FixObj(QPlainTextEdit, self.font3, '', 840, 200).run()
 
         tx_empty = QLineEdit()
         tx_empty.setVisible(False)
@@ -1624,42 +1256,26 @@ class App(QWidget):
         lb_empty = QLabel()
         lb_empty.setFixedHeight(10)
 
-        self.pb_run_scan = QPushButton('Run')
-        self.pb_run_scan.setFont(self.font1)
-        self.pb_run_scan.setFixedHeight(40)
-        self.pb_run_scan.setFixedWidth(120)
-        #self.pb_run_scan.setDisabled(True)
+        self.pb_run_scan = FixObj(QPushButton, self.font1, 'Run', 120, 40).run()
         self.pb_run_scan.setStyleSheet('color: rgb(200, 50, 50);')
         self.pb_run_scan.clicked.connect(self.run_scan)
 
-        self.pb_pause_scan = QPushButton('Pause')
-        self.pb_pause_scan.setFont(self.font1)
-        self.pb_pause_scan.setFixedHeight(40)
-        self.pb_pause_scan.setFixedWidth(80)
+        self.pb_pause_scan = FixObj(QPushButton, self.font1, 'Pause', 80, 40).run()
         self.pb_pause_scan.setStyleSheet('color: rgb(200, 200, 200)')
         self.pb_pause_scan.setEnabled(False)        
         self.pb_pause_scan.clicked.connect(self.run_pause)
 
-        self.pb_resume_scan = QPushButton('Resume')
-        self.pb_resume_scan.setFont(self.font1)
-        self.pb_resume_scan.setFixedHeight(40)
-        self.pb_resume_scan.setFixedWidth(80)
+        self.pb_resume_scan = FixObj(QPushButton, self.font1, 'Resume', 80, 40).run()
         self.pb_resume_scan.setStyleSheet('color: rgb(200, 200, 200);')
         self.pb_resume_scan.setEnabled(False)
         self.pb_resume_scan.clicked.connect(self.run_resume)
 
-        self.pb_stop_scan = QPushButton('Stop')
-        self.pb_stop_scan.setFont(self.font1)
-        self.pb_stop_scan.setFixedHeight(40)
-        self.pb_stop_scan.setFixedWidth(80)
+        self.pb_stop_scan = FixObj(QPushButton, self.font1, 'Stop', 80, 40).run()
         self.pb_stop_scan.setStyleSheet('color: rgb(200, 200, 200);')
         self.pb_stop_scan.setEnabled(False)
         self.pb_stop_scan.clicked.connect(self.run_stop)
 
-        self.pb_abort_scan = QPushButton('Abort')
-        self.pb_abort_scan.setFont(self.font1)
-        self.pb_abort_scan.setFixedHeight(40)
-        self.pb_abort_scan.setFixedWidth(80)
+        self.pb_abort_scan = FixObj(QPushButton, self.font1, 'Abort', 80, 40).run()
         self.pb_abort_scan.setStyleSheet('color: rgb(200, 200, 200);')
         self.pb_abort_scan.setEnabled(False)
         self.pb_abort_scan.clicked.connect(self.run_abort)
@@ -1678,30 +1294,20 @@ class App(QWidget):
     def hbox_scan_id(self):
         lb_empty = QLabel()
 
-        lb_sid = QLabel()
-        lb_sid.setText('Latest scan ID:')
+        lb_sid = FixObj(QLabel, self.font1,'Latest scan ID:', 120).run()
         lb_sid.setAlignment(QtCore.Qt.AlignLeft)
         lb_sid.setAlignment(QtCore.Qt.AlignVCenter)
-        lb_sid.setFont(self.font1)
-        lb_sid.setFixedWidth(120)
 
-        self.lb_current_sid = QLabel()
-        self.lb_current_sid.setText('')
-        self.lb_current_sid.setFont(self.font1)
-        self.lb_current_sid.setFixedWidth(80)
+        self.lb_current_sid = FixObj(QLabel, self.font1, '', 80).run()
         self.lb_current_sid.setAlignment(QtCore.Qt.AlignLeft)
         self.lb_current_sid.setAlignment(QtCore.Qt.AlignVCenter)
         self.lb_current_sid.setStyleSheet('color: rgb(200, 50, 50);')
 
-        self.tx_sid = QLineEdit()
-        self.tx_sid.setFixedWidth(120)
-        self.tx_sid.setFont(self.font2)
+        self.tx_sid = FixObj(QLineEdit, self.font2, '', 120).run()
         self.tx_sid.setValidator(QIntValidator())
 
-        self.pb_sid = QPushButton('Reset scan ID to:')
+        self.pb_sid = FixObj(QPushButton, self.font2, 'Reset scan ID to:', 160).run()
         self.pb_sid.clicked.connect(self.reset_sid)
-        self.pb_sid.setFont(self.font2)
-        self.pb_sid.setFixedWidth(160)
 
         hbox1 = QHBoxLayout()
         hbox1.addWidget(lb_sid)
@@ -1724,44 +1330,39 @@ class App(QWidget):
     def vbox_lst_pre_defined_scan(self):
         # lb_empty = QLabel()
         # lb_empty.setFixedWidth(40)
-        lb_title = QLabel()
-        lb_title.setText('Scan type')
-        lb_title.setFont(self.font1)
+        lb_title = FixObj(QLabel, self.font1, 'Scan type').run()
 
         #n = len(scan_list)
 
-        self.lst_scan = QListWidget()
-        self.lst_scan.setFixedWidth(200)
-        self.lst_scan.setFixedHeight(160)
-        self.lst_scan.setFont(self.font2)
+        self.lst_scan = FixObj(QListWidget, self.font2, '', 200, 160).run()
         self.lst_scan.setSelectionMode(QAbstractItemView.SingleSelection)
         self.load_scan_type_list(1) # load commonly used scans
 
         self.lst_scan.itemClicked.connect(self.show_scan_example)
         self.lst_scan.setSelectionMode(QAbstractItemView.SingleSelection)
 
-        self.pb_scan_list1 = FixButton(self.font2, 'Common', 100)
+        self.pb_scan_list1 = FixObj(QPushButton, self.font2, 'Common', 100).run()
         self.pb_scan_list1.clicked.connect(lambda: self.load_scan_type_list(1))
 
-        self.pb_scan_list2 = FixButton(self.font2, 'Other scan', 100)
+        self.pb_scan_list2 = FixObj(QPushButton, self.font2, 'Other scan', 100).run()
         self.pb_scan_list2.clicked.connect(lambda: self.load_scan_type_list(2))
 
-        self.pb_scan_list3 = FixButton(self.font2, 'User scan', 100)
+        self.pb_scan_list3 = FixObj(QPushButton, self.font2, 'User scan', 100).run()
         self.pb_scan_list3.clicked.connect(lambda: self.load_scan_type_list(3))
 
-        self.pb_scan_list4 = FixButton(self.font2, 'Extract .py file ...', 135)
+        self.pb_scan_list4 = FixObj(QPushButton, self.font2, 'Extract .py file ...', 135).run()
         self.pb_scan_list4.clicked.connect(lambda: self.update_scan_type_list(4))
 
-        self.pb_scan_list5 = FixButton(self.font2, 'Temporary loaded', 135)
+        self.pb_scan_list5 = FixObj(QPushButton, self.font2, 'Temporary loaded', 135).run()
         self.pb_scan_list5.clicked.connect(lambda: self.load_scan_type_list(5))
 
-        self.pb_scan_list1_update = FixButton(self.font2, 'U', 30)
+        self.pb_scan_list1_update = FixObj(QPushButton, self.font2, 'U', 30).run()
         self.pb_scan_list1_update.clicked.connect(lambda: self.update_scan_type_list(1))
 
-        self.pb_scan_list2_update = FixButton(self.font2, 'U', 30)
+        self.pb_scan_list2_update = FixObj(QPushButton, self.font2, 'U', 30).run()
         self.pb_scan_list2_update.clicked.connect(lambda: self.update_scan_type_list(2))
 
-        self.pb_scan_list3_update = FixButton(self.font2, 'U', 30)
+        self.pb_scan_list3_update = FixObj(QPushButton, self.font2, 'U', 30).run()
         self.pb_scan_list3_update.clicked.connect(lambda: self.update_scan_type_list(3))
 
         hbox_scan_list1 = QHBoxLayout()
@@ -1800,56 +1401,32 @@ class App(QWidget):
         return vbox
 
     def vbox_eng_list(self):
-        lb_title = QLabel()
-        lb_title.setText('Energy list')
-        lb_title.setFixedWidth(120)
-        lb_title.setFont(self.font1)
-
-        self.lst_eng_list = QListWidget()
-        self.lst_eng_list.setFixedWidth(160)
-        self.lst_eng_list.setFixedHeight(160)
-        self.lst_eng_list.setFont(self.font2)
+        lb_title = FixObj(QLabel, self.font1, 'Energy list', 120).run()
+        self.lst_eng_list = FixObj(QListWidget, self.font2, '', 160, 160).run()
         self.lst_eng_list.setSelectionMode(QAbstractItemView.SingleSelection)
         self.lst_eng_list.clicked.connect(self.select_eng_list)
 
-        lb_name = QLabel()
-        lb_name.setText('Name:')
-        lb_name.setFont(self.font2)
-        lb_name.setFixedWidth(80)
+        lb_name = FixObj(QLabel, self.font2, 'Name:', 80).run()
 
-        self.tx_eng_name = QLineEdit()
-        self.tx_eng_name.setFont(self.font2)
-        self.tx_eng_name.setFixedWidth(80)
+        self.tx_eng_name = FixObj(QLineEdit, self.font2, '', 80).run()
 
-        self.pb_load_eng_list = QPushButton('load (.txt)')
-        self.pb_load_eng_list.setFixedWidth(80)
-        self.pb_load_eng_list.setFont(self.font2)
+        self.pb_load_eng_list = FixObj(QPushButton, self.font2, 'load (.txt)', 80).run()
         self.pb_load_eng_list.clicked.connect(self.load_eng_list)
 
-        self.pb_select_eng_list = QPushButton('select')
-        self.pb_select_eng_list.setFixedWidth(80)
-        self.pb_select_eng_list.setFont(self.font2)
+        self.pb_select_eng_list = FixObj(QPushButton, self.font2, 'select', 80).run()
         self.pb_select_eng_list.clicked.connect(self.select_eng_list)
         self.pb_select_eng_list.setDisabled(True)
 
-        self.pb_plot_eng_list = QPushButton('plot')
-        self.pb_plot_eng_list.setFixedWidth(80)
-        self.pb_plot_eng_list.setFont(self.font2)
+        self.pb_plot_eng_list = FixObj(QPushButton, self.font2, 'plot', 80).run()
         self.pb_plot_eng_list.clicked.connect(self.plot_eng_list)
 
-        self.pb_save_eng_list = QPushButton('save')
-        self.pb_save_eng_list.setFixedWidth(80)
-        self.pb_save_eng_list.setFont(self.font2)
+        self.pb_save_eng_list = FixObj(QPushButton, self.font2, 'save', 80).run()
         self.pb_save_eng_list.clicked.connect(self.save_eng_list)
 
-        self.pb_rm_eng_list = QPushButton('delete')
-        self.pb_rm_eng_list.setFixedWidth(80)
-        self.pb_rm_eng_list.setFont(self.font2)
+        self.pb_rm_eng_list = FixObj(QPushButton, self.font2, 'delete', 80).run()
         self.pb_rm_eng_list.clicked.connect(self.remove_eng_list)
 
-        self.pb_rmall_eng_list = QPushButton('del. all')
-        self.pb_rmall_eng_list.setFixedWidth(80)
-        self.pb_rmall_eng_list.setFont(self.font2)
+        self.pb_rmall_eng_list = FixObj(QPushButton, self.font2, 'del. all', 80).run()
         self.pb_rmall_eng_list.clicked.connect(self.remove_all_eng_list)
 
         hbox1 = QHBoxLayout()
@@ -1892,26 +1469,17 @@ class App(QWidget):
         return vbox
 
     def vbox_record_scan(self):
-        lb_title = QLabel()
-        lb_title.setText('Recorded scan')
-        lb_title.setFont(self.font1)
+        lb_title = FixObj(QLabel, self.font1, 'Recorded scan').run()
 
-        self.lst_record_scan = QListWidget()
-        self.lst_record_scan.setFixedWidth(160)
-        self.lst_record_scan.setFixedHeight(160)
-        self.lst_record_scan.setFont(self.font2)
+        self.lst_record_scan = FixObj(QListWidget, self.font2, '', 160, 160).run()   
         self.lst_record_scan.itemClicked.connect(self.show_recorded_scan)
         self.lst_record_scan.setSelectionMode(QAbstractItemView.SingleSelection)
 
-        self.pb_record = QPushButton('record')
-        self.pb_record.setFixedWidth(80)
-        self.pb_record.setFont(self.font2)
+        self.pb_record = FixObj(QPushButton, self.font2, 'record', 80).run()
         self.pb_record.setDisabled(True)
         self.pb_record.clicked.connect(self.record_scan)
 
-        self.pb_record_remove = QPushButton('delete')
-        self.pb_record_remove.setFixedWidth(80)
-        self.pb_record_remove.setFont(self.font2)
+        self.pb_record_remove = FixObj(QPushButton, self.font2, 'delete', 80).run()
         self.pb_record_remove.clicked.connect(self.remove_recorded_scan)
 
         vbox1 = QVBoxLayout()
@@ -1932,31 +1500,20 @@ class App(QWidget):
         return vbox
 
     def vbox_operator(self):
-        lb_title = QLabel()
-        lb_title.setText('Operators')
-        lb_title.setFont(self.font1)
-
-
-        self.rd_op_repeat_s = QRadioButton('Repeat')
+        lb_title = FixObj(QLabel, self.font1,'Operators').run()
+        self.rd_op_repeat_s = FixObj(QRadioButton, self.font2, 'Repeat', 90).run()
         # self.rd_op_repeat_s.setStyleSheet('color: rgb(0, 80, 255);')
-        self.rd_op_repeat_s.setFixedWidth(90)
-        self.rd_op_repeat_s.setFont(self.font2)
+
         self.rd_op_repeat_s.setChecked(True)
 
-        self.rd_op_repeat_e = QRadioButton('End repeat')
+        self.rd_op_repeat_e = FixObj(QRadioButton, self.font2, 'End Repeat', 90).run()
         # self.rd_op_repeat_e.setStyleSheet('color: rgb(0, 80, 255);')
-        self.rd_op_repeat_e.setFixedWidth(110)
-        self.rd_op_repeat_e.setFont(self.font2)
 
-        self.rd_op_sleep = QRadioButton('sleep (s)')
+        self.rd_op_sleep = FixObj(QRadioButton, self.font2, 'sleep (s)', 90).run()
         # self.rd_op_sleep.setStyleSheet('color: rgb(0, 80, 255);')
-        self.rd_op_sleep.setFixedWidth(90)
-        self.rd_op_sleep.setFont(self.font2)
 
-        self.rd_op_select_scan = QRadioButton('select scan')
+        self.rd_op_select_scan = FixObj(QRadioButton, self.font2, 'select scan', 110).run()
         # self.rd_op_select_scan.setStyleSheet('color: rgb(0, 80, 255);')
-        self.rd_op_select_scan.setFixedWidth(110)
-        self.rd_op_select_scan.setFont(self.font2)
 
         self.operator_group = QButtonGroup()
         self.operator_group.setExclusive(True)
@@ -1965,22 +1522,15 @@ class App(QWidget):
         self.operator_group.addButton(self.rd_op_sleep)
         self.operator_group.addButton(self.rd_op_select_scan)
 
-        self.tx_op_repeat = QLineEdit()
-        self.tx_op_repeat.setText('1')
+        self.tx_op_repeat = FixObj(QLineEdit, self.font2, '1', 60).run()
         # self.tx_op_repeat.setStyleSheet('color: rgb(0, 80, 255);')
         self.tx_op_repeat.setValidator(QIntValidator())
-        self.tx_op_repeat.setFixedWidth(60)
-        self.tx_op_repeat.setFont(self.font2)
 
-        self.tx_op_sleep = QLineEdit()
+        self.tx_op_sleep = FixObj(QLineEdit, self.font2, '', 60).run()
         self.tx_op_sleep.setValidator(QDoubleValidator())
-        self.tx_op_sleep.setFixedWidth(60)
-        self.tx_op_sleep.setFont(self.font2)
 
-        self.pb_op_insert = QPushButton('Insert')
+        self.pb_op_insert = FixObj(QPushButton, self.font2, 'Insert', 140).run()
         # self.pb_op_insert.setStyleSheet('color: rgb(0, 80, 255);')
-        self.pb_op_insert.setFixedWidth(140)
-        self.pb_op_insert.setFont(self.font2)
         self.pb_op_insert.clicked.connect(self.insert_operator)
 
         hbox1 = QHBoxLayout()
@@ -2005,50 +1555,30 @@ class App(QWidget):
         return vbox
 
     def vbox_assemble_scan(self):
-        lb_title = QLabel()
-        lb_title.setText('Assembled scan')
-        lb_title.setFont(self.font1)
+        lb_title = FixObj(QLabel, self.font1, 'Assembled scan').run()
         # lb_title.setStyleSheet('color: rgb(0, 80, 255);')
 
-        self.lst_assembled_scan = QListWidget()
-        self.lst_assembled_scan.setFixedWidth(160)
-        self.lst_assembled_scan.setFixedHeight(160)
-        self.lst_assembled_scan.setFont(self.font2)
+        self.lst_assembled_scan = FixObj(QListWidget, self.font2, '', 160, 160).run()
         self.lst_assembled_scan.setSelectionMode(QAbstractItemView.SingleSelection)
 
-        self.pb_assembled_scan_remove = QPushButton('delete')
-        self.pb_assembled_scan_remove.setFixedWidth(80)
-        self.pb_assembled_scan_remove.setFont(self.font2)
+        self.pb_assembled_scan_remove = FixObj(QPushButton, self.font2, 'delete', 80).run()
         self.pb_assembled_scan_remove.clicked.connect(self.remove_assemble_scan)
 
-        self.pb_assembled_scan_remove_all = QPushButton('del. all')
-        self.pb_assembled_scan_remove_all.setFixedWidth(80)
-        self.pb_assembled_scan_remove_all.setFont(self.font2)
+        self.pb_assembled_scan_remove_all = FixObj(QPushButton, self.font2, 'del. all', 80).run()
         self.pb_assembled_scan_remove_all.clicked.connect(self.remove_all_assemble_scan)
 
-        self.pb_assembled_scan_up = QPushButton('mv up')
-        self.pb_assembled_scan_up.setFixedWidth(80)
-        self.pb_assembled_scan_up.setFont(self.font2)
+        self.pb_assembled_scan_up = FixObj(QPushButton, self.font2, 'mv up', 80).run()
         self.pb_assembled_scan_up.clicked.connect(self.assemble_scan_mv_up)
 
-        self.pb_assembled_scan_down = QPushButton('mv down')
-        self.pb_assembled_scan_down.setFixedWidth(80)
-        self.pb_assembled_scan_down.setFont(self.font2)
+        self.pb_assembled_scan_down = FixObj(QPushButton, self.font2, 'mv down', 80).run()
         self.pb_assembled_scan_down.clicked.connect(self.assemble_scan_mv_down)
 
-        self.pb_assembled = QPushButton('assemble')
-        self.pb_assembled.setFixedWidth(165)
-        self.pb_assembled.setFont(self.font2)
+        self.pb_assembled = FixObj(QPushButton, self.font2, 'assemble', 165).run()
         self.pb_assembled.clicked.connect(self.assemble_scan_assemble)
 
-        lb_name = QLabel()
-        lb_name.setText('fun. name')
-        lb_name.setFixedWidth(80)
-        lb_name.setFont(self.font2)
+        lb_name = FixObj(QLabel, self.font2, 'fun. name', 80).run()
 
-        self.tx_fun_name = QLineEdit()
-        self.tx_fun_name.setFont(self.font2)
-        self.tx_fun_name.setFixedWidth(80)
+        self.tx_fun_name = FixObj(QLineEdit, self.font2, '', 80).run()
 
         hbox1 = QHBoxLayout()
         hbox1.addWidget(self.pb_assembled_scan_up)
@@ -2087,48 +1617,35 @@ class App(QWidget):
     def layout_matrix_scan_argument(self):
         self.scan_lb = {}
         self.scan_tx = {}
-        lb_empty = FixLabel(self.font2, '', 30)
+        lb_empty = FixObj(QLabel, self.font2, '', 30).run()
         hbox = {}
         vbox = QVBoxLayout()
         for i in range(20):
-            self.scan_lb[f'lb_{i}'] = QLabel()
-            self.scan_lb[f'lb_{i}'].setText(f'param {i}:')
+            self.scan_lb[f'lb_{i}'] = FixObj(QLabel, self.font2, f'param {i}:', 160).run()
             self.scan_lb[f'lb_{i}'].setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-            self.scan_lb[f'lb_{i}'].setFixedWidth(160)
-            self.scan_lb[f'lb_{i}'].setFont(self.font2)
             self.scan_lb[f'lb_{i}'].setVisible(False)
-            self.scan_tx[f'tx_{i}'] = QLineEdit()
-            self.scan_tx[f'tx_{i}'].setFixedWidth(120)
-            self.scan_tx[f'tx_{i}'].setFont(self.font2)
+            
+            self.scan_tx[f'tx_{i}'] = FixObj(QLineEdit, self.font2, '', 120).run()
             self.scan_tx[f'tx_{i}'].setVisible(False)
-        self.scan_lb['note'] = QLabel()
-        self.scan_lb['note'].setText('Sample infor:')
+
+        self.scan_lb['note'] = FixObj(QLabel, self.font1, 'Sample infor:', 160).run()
         self.scan_lb['note'].setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        self.scan_lb['note'].setFont(self.font1)
-        self.scan_lb['note'].setFixedWidth(160)
         self.scan_lb['note'].setVisible(True)
-        self.scan_tx['note'] = QLineEdit()
-        self.scan_tx['note'].setFont(self.font2)
-        self.scan_tx['note'].setFixedWidth(290)
+        
+        self.scan_tx['note'] = FixObj(QLineEdit, self.font2, '', 290).run()
         self.scan_tx['note'].setVisible(True)
 
-        self.scan_lb['XEng'] = QLabel()
-        self.scan_lb['XEng'].setText('X-ray Energy:')
-        self.scan_lb['XEng'].setFont(self.font1)
-        self.scan_lb['XEng'].setFixedWidth(120)
+        self.scan_lb['XEng'] = FixObj(QLabel, self.font1, 'X-ray Energy:', 120).run()
         self.scan_lb['XEng'].setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        self.scan_tx['XEng'] = QLineEdit()
+        
+        self.scan_tx['XEng'] = FixObj(QLineEdit, self.font2, '', 120).run()
         self.scan_tx['XEng'].setValidator(QDoubleValidator())
-        self.scan_tx['XEng'].setFont(self.font2)
-        self.scan_tx['XEng'].setFixedWidth(120)
 
-        self.pb_read_current_eng = QPushButton('use curr. XEng')
+        self.pb_read_current_eng = FixObj(QPushButton, self.font2, 'use curr. XEng', 120).run()
         self.pb_read_current_eng.clicked.connect(self.use_current_eng)
-        self.pb_read_current_eng.setFixedWidth(120)
-        self.pb_read_current_eng.setFont(self.font2)
 
-        lb_pix = FixLabel(self.font1, 'Pixel size:', 80)
-        self.lb_pixel_size = FixLabel(self.font2, '', 120)
+        lb_pix = FixObj(QLabel, self.font1, 'Pixel size:', 80).run()
+        self.lb_pixel_size = FixObj(QLabel, self.font2, '', 120).run()
 
         for i in range(4):
             hbox[f'hbox_{i}'] = QHBoxLayout()
@@ -2149,36 +1666,22 @@ class App(QWidget):
         hbox['note'].setAlignment(QtCore.Qt.AlignLeft)
 
         lb_empty = QLabel()
-        lb_pos = QLabel()
-        lb_pos.setText('Sample / Bkg. Pos.:')
-        lb_pos.setFont(self.font1)
+        lb_pos = FixObj(QLabel, self.font1, 'Sample / Bkg. Pos.:', 160).run()
         lb_pos.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        lb_pos.setFixedWidth(160)
 
-        self.lb_sampel_pos_msg = QLabel()
-        self.lb_sampel_pos_msg.setFont(self.font2)
-        self.lb_sampel_pos_msg.setText('  If empty, use current position')
+        self.lb_sampel_pos_msg = FixObj(QLabel, self.font2, '  If empty, use current position').run()
 
-        self.tx_pos = QLineEdit()
-        self.tx_pos.setFixedWidth(290)
-        self.tx_pos.setFont(self.font2)
+        self.tx_pos = FixObj(QLineEdit, self.font2, '', 290).run()
 
-        self.pb_choose_pos = QPushButton('add from list')
-        self.pb_choose_pos.setFixedWidth(120)
-        self.pb_choose_pos.setFont(self.font2)
+        self.pb_choose_pos = FixObj(QPushButton, self.font2, 'add from list', 120).run()
         self.pb_choose_pos.clicked.connect(self.add_sample_pos)
 
-        self.pb_clear_pos = QPushButton('clear positions')
-        self.pb_clear_pos.setFixedWidth(120)
-        self.pb_clear_pos.setFont(self.font2)
+        self.pb_clear_pos = FixObj(QPushButton, self.font2, 'clear positions',120).run()
         self.pb_clear_pos.clicked.connect(self.clear_scan_pos)
 
-        self.pb_assemble_scan = QPushButton('check scan')
-        self.pb_assemble_scan.setFont(self.font1)
-        self.pb_assemble_scan.setFixedWidth(120)
+        self.pb_assemble_scan = FixObj(QPushButton, self.font1, 'check scan', 120).run()
         self.pb_assemble_scan.setStyleSheet('color: rgb(200, 50, 50);')
         self.pb_assemble_scan.clicked.connect(self.check_scan)
-
 
         hbox_pos = QHBoxLayout()
         hbox_pos.addWidget(lb_pos)
@@ -2426,7 +1929,7 @@ class App(QWidget):
             intro += eval(scan_name[4:]).__doc__
         except:
             print(f'function "{scan_name}" does not have description')
-        print(scan_name[4:])
+        #print(scan_name[4:])
         self.tx_scan_msg.setPlainText(intro)
 
     def show_scan_example(self):
@@ -3301,7 +2804,7 @@ class App(QWidget):
         lb_empty = QLabel()
         lb_empty2 = QLabel()
         lb_empty2.setFixedHeight(10)
-        lb_title = FixLabel(self.font1, 'Optical Parameter Calculation', 300)
+        lb_title = FixObj(QLabel, self.font1, 'Optical Parameter Calculation', 300).run()
         hbox = QHBoxLayout()
         hbox.addLayout(self.vbox_zone_plate_cal_1())
         hbox.addWidget(self.vbox_zone_plate_cal_2())
@@ -3317,27 +2820,27 @@ class App(QWidget):
         return vbox
 
     def vbox_zone_plate_cal_1(self):
-        lb_zp_diameter = FixLabel(self.font2, 'ZP diameter:', 120)
-        lb_zp_diameter_unit = FixLabel(self.font2, 'um', 40)
-        self.tx_zp_diamter = FixEditor(self.font2, '244', 60 )
+        lb_zp_diameter = FixObj(QLabel, self.font2, 'ZP diameter:', 120).run()
+        lb_zp_diameter_unit = FixObj(QLabel, self.font2, 'um', 40).run()
+        self.tx_zp_diamter = FixObj(QLineEdit, self.font2, '244', 60 ).run()
 
-        lb_zp_width = FixLabel(self.font2, 'Outer width:', 120)
-        lb_zp_width_unit = FixLabel(self.font2, 'nm', 40)
-        self.tx_zp_width = FixEditor(self.font2, '30', 60)
+        lb_zp_width = FixObj(QLabel, self.font2, 'Outer width:', 120).run()
+        lb_zp_width_unit = FixObj(QLabel, self.font2, 'nm', 40).run()
+        self.tx_zp_width = FixObj(QLineEdit, self.font2, '30', 60).run()
 
-        lb_txm_mag = FixLabel(self.font2, 'ZP Mag:', 120)
-        lb_txm_mag_unit = FixLabel(self.font2, 'x', 40)
-        self.tx_txm_mag = FixEditor(self.font2, '32.5', 60)
+        lb_txm_mag = FixObj(QLabel, self.font2, 'ZP Mag:', 120).run()
+        lb_txm_mag_unit = FixObj(QLabel, self.font2, 'x', 40).run()
+        self.tx_txm_mag = FixObj(QLabel, self.font2, '32.5', 60).run()
 
-        lb_vlm_mag = FixLabel(self.font2, 'Vis Lens Mag:', 120)
-        lb_vlm_mag_unit = FixLabel(self.font2, 'x', 40)
-        self.tx_vlm_mag = FixEditor(self.font2, '10', 60)
+        lb_vlm_mag = FixObj(QLabel, self.font2, 'Vis Lens Mag:', 120).run()
+        lb_vlm_mag_unit = FixObj(QLabel, self.font2, 'x', 40).run()
+        self.tx_vlm_mag = FixObj(QLineEdit, self.font2, '10', 60).run()
 
-        lb_xray_eng = FixLabel(self.font2, 'X-ray energy:', 120)
-        lb_xray_eng_unit = FixLabel(self.font2, 'keV', 40)
-        self.tx_xray_eng = FixEditor(self.font2, '8.0', 60)
+        lb_xray_eng = FixObj(QLabel, self.font2, 'X-ray energy:', 120).run()
+        lb_xray_eng_unit = FixObj(QLabel, self.font2, 'keV', 40).run()
+        self.tx_xray_eng = FixObj(QLineEdit, self.font2, '8.0', 60).run()
         
-        self.pb_zp_cal = FixButton(self.font2, 'Calculate', 230 )
+        self.pb_zp_cal = FixObj(QPushButton, self.font2, 'Calculate', 230).run()
         self.pb_zp_cal.clicked.connect(self.cal_zone_plate_param)
         
         hbox_dia = QHBoxLayout()
@@ -3382,42 +2885,42 @@ class App(QWidget):
         return vbox_zp
 
     def vbox_zone_plate_cal_2(self):
-        lb_zp_cal = FixLabel(self.font2, '--->', 60)
+        lb_zp_cal = FixObj(QLabel, self.font2, '--->', 60).run()
         lb_zp_cal.setAlignment(QtCore.Qt.AlignCenter)
         return lb_zp_cal
 
     def vbox_zone_plate_cal_3(self):
-        lb_zp_wl = FixLabel(self.font2, 'Wavelength:', 120)
-        lb_zp_wl_unit = FixLabel(self.font2, 'nm', 40)
-        self.tx_zp_wl = FixEditor(self.font2, '', 80 )
+        lb_zp_wl = FixObj(QLabel, self.font2, 'Wavelength:', 120).run()
+        lb_zp_wl_unit = FixObj(QLabel, self.font2, 'nm', 40).run()
+        self.tx_zp_wl = FixObj(QLineEdit, self.font2, '', 80 ).run()
 
-        lb_zp_fl = FixLabel(self.font2, 'Focal length:', 120)
-        lb_zp_fl_unit = FixLabel(self.font2, 'mm', 40)
-        self.tx_zp_fl = FixEditor(self.font2, '', 80)
+        lb_zp_fl = FixObj(QLabel, self.font2, 'Focal length:', 120).run()
+        lb_zp_fl_unit = FixObj(QLabel, self.font2, 'mm', 40).run()
+        self.tx_zp_fl = FixObj(QLineEdit, self.font2, '', 80).run()
 
-        lb_zp_na = FixLabel(self.font2, 'NA:', 120)
-        lb_zp_na_unit = FixLabel(self.font2, 'mrad', 40)
-        self.tx_zp_na = FixEditor(self.font2, '', 80)
+        lb_zp_na = FixObj(QLabel, self.font2, 'NA:', 120).run()
+        lb_zp_na_unit = FixObj(QLabel, self.font2, 'mrad', 40).run()
+        self.tx_zp_na = FixObj(QLineEdit, self.font2, '', 80).run()
 
-        lb_zp_dof= FixLabel(self.font2, 'DOF:', 120)
-        lb_zp_dof_unit = FixLabel(self.font2, 'um', 40)
-        self.tx_zp_dof = FixEditor(self.font2, '', 80)
+        lb_zp_dof= FixObj(QLabel, self.font2, 'DOF:', 120).run()
+        lb_zp_dof_unit = FixObj(QLabel, self.font2, 'um', 40).run()
+        self.tx_zp_dof = FixObj(QLineEdit, self.font2, '', 80).run()
 
-        lb_zp_dis = FixLabel(self.font2, 'ZP position:', 120)
+        lb_zp_dis = FixObj(QLabel, self.font2, 'ZP position:', 120).run()
         stylesheet = 'color: rgb(0, 80, 255)'
         lb_zp_dis.setStyleSheet(stylesheet)
-        lb_zp_dis_unit = FixLabel(self.font2, 'mm', 40)
-        self.tx_zp_dis = FixEditor(self.font2, '', 80)
+        lb_zp_dis_unit = FixObj(QLabel, self.font2, 'mm', 40).run()
+        self.tx_zp_dis = FixObj(QLineEdit, self.font2, '', 80).run()
 
-        lb_zp_ccd = FixLabel(self.font2, 'CCD posistion:', 120)
+        lb_zp_ccd = FixObj(QLabel, self.font2, 'CCD posistion:', 120).run()
         stylesheet = 'color: rgb(0, 80, 255)'
         lb_zp_ccd.setStyleSheet(stylesheet)
-        lb_zp_ccd_unit = FixLabel(self.font2, 'mm', 40)
-        self.tx_zp_ccd = FixEditor(self.font2, '', 80)
+        lb_zp_ccd_unit = FixObj(QLabel, self.font2, 'mm', 40).run()
+        self.tx_zp_ccd = FixObj(QLineEdit, self.font2, '', 80).run()
 
-        lb_pix = FixLabel(self.font1, 'Pix size:', 120)
-        lb_pix_unit = FixLabel(self.font2, 'mm', 40)
-        self.tx_pix = FixEditor(self.font2, '', 80)
+        lb_pix = FixObj(QLabel, self.font1, 'Pix size:', 120).run()
+        lb_pix_unit = FixObj(QLabel, self.font2, 'mm', 40).run()
+        self.tx_pix = FixObj(QLineEdit, self.font2, '', 80).run()
 
         hbox_wl = QHBoxLayout()
         hbox_wl.addWidget(lb_zp_wl)
@@ -3465,308 +2968,10 @@ class App(QWidget):
         vbox_zp.setAlignment(QtCore.Qt.AlignTop)
 
         return vbox_zp
-    '''
-    def hbox_optics_1(self):
-        # get together
-        lb_empty = QLabel()
-        hbox_1 = QHBoxLayout()
-        #hbox_1.addLayout(self.vbox_optics_box1())
-        #hbox_1.addLayout(self.vbox_optics_box2())
-        #hbox_1.addLayout(self.vbox_optics_box3())
-        #hbox_1.addLayout(self.vbox_optics_box4())
-        #hbox_1.addLayout(self.vbox_optics_box5())
-        #hbox_1.addLayout(self.vbox_optics_box6())
-        #hbox_1.addLayout(self.vbox_optics_box7())
-        
-        hbox_1.addStretch()
-        hbox_1.setAlignment(QtCore.Qt.AlignLeft)
-
-        return hbox_1
-
-    def vbox_optics_box1(self):
-        w = 140
-        h = 180
-        bkg = 'background-color: rgb(240, 240, 240);'
-        h1 = 30
-        # sample and XEng and DetA
-        lb_1 = QLabel()
-        lb_1.setText('General')
-        lb_1.setFont(self.font2)
-        lb_1.setFixedWidth(w)
-        self.lst_op_1 = QListWidget()
-        self.lst_op_1.setFixedWidth(w)
-        self.lst_op_1.setFixedHeight(h)
-        self.lst_op_1.setFont(self.font2)
-        self.lst_op_1.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.lst_op_1.itemClicked.connect(lambda: self.show_op_position(1))
-
-        self.lst_op_1.addItem('XEng')
-        self.lst_op_1.addItem('beam_current')
-        self.lst_op_1.addItem('zps.sx')
-        self.lst_op_1.addItem('zps.sy')
-        self.lst_op_1.addItem('zps.sz')
-        self.lst_op_1.addItem('zps.pi_r')
-        self.lst_op_1.addItem('DetU.x')
-        self.lst_op_1.addItem('DetU.y')
-        self.lst_op_1.addItem('DetU.z')
-
-        self.lb_op_1 = QLabel()
-        self.lb_op_1.setFixedWidth(w)
-        self.lb_op_1.setFixedHeight(h1)
-        self.lb_op_1.setStyleSheet(bkg)
-        self.lb_op_1.setFont(self.font2)
-        vbox_1 = QVBoxLayout()
-        vbox_1.addWidget(lb_1)
-        vbox_1.addWidget(self.lst_op_1)
-        vbox_1.addWidget(self.lb_op_1)
-        vbox_1.addStretch()
-        vbox_1.setAlignment(QtCore.Qt.AlignTop)
-        return vbox_1
-
-    def vbox_optics_box2(self):
-        w = 140
-        h = 180
-        h1 = 30
-        bkg = 'background-color: rgb(240, 240, 240);'
-        # lens and zp and aper
-        lb_2 = QLabel()
-        lb_2.setText('txm optics')
-        lb_2.setFont(self.font2)
-        lb_2.setFixedWidth(w)
-        self.lst_op_2 = QListWidget()
-        self.lst_op_2.setFixedWidth(w)
-        self.lst_op_2.setFixedHeight(h)
-        self.lst_op_2.setFont(self.font2)
-        self.lst_op_2.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.lst_op_2.itemClicked.connect(lambda: self.show_op_position(2))
-
-        self.lst_op_2.addItem('clens.x')
-        self.lst_op_2.addItem('clens.y1')
-        self.lst_op_2.addItem('clens.y2')
-        self.lst_op_2.addItem('clens.z1')
-        self.lst_op_2.addItem('clens.z2')
-        self.lst_op_2.addItem('clens.p')
-        self.lst_op_2.addItem('zp.x')
-        self.lst_op_2.addItem('zp.y')
-        self.lst_op_2.addItem('zp.z')
-        self.lst_op_2.addItem('aper.x')
-        self.lst_op_2.addItem('aper.y')
-        self.lst_op_2.addItem('aper.z')
-        self.lb_op_2 = QLabel()
-        self.lb_op_2.setFixedWidth(w)
-        self.lb_op_2.setFixedHeight(h1)
-        self.lb_op_2.setStyleSheet(bkg)
-        self.lb_op_2.setFont(self.font2)
-        vbox_2 = QVBoxLayout()
-        vbox_2.addWidget(lb_2)
-        vbox_2.addWidget(self.lst_op_2)
-        vbox_2.addWidget(self.lb_op_2)
-        vbox_2.addStretch()
-        vbox_2.setAlignment(QtCore.Qt.AlignTop)
-        return vbox_2
-
-    def vbox_optics_box3(self):
-        # ssa and filter
-        w = 140
-        h = 180
-        h1 = 30
-        bkg = 'background-color: rgb(240, 240, 240);'
-        lb_3 = QLabel()
-        #lb_3.setText('ssa, filter')
-        lb_3.setText('ssa, ic')
-        lb_3.setFont(self.font2)
-        lb_3.setFixedWidth(w)
-        self.lst_op_3 = QListWidget()
-        self.lst_op_3.setFixedWidth(w)
-        self.lst_op_3.setFixedHeight(h)
-        self.lst_op_3.setFont(self.font2)
-        self.lst_op_3.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.lst_op_3.itemClicked.connect(lambda: self.show_op_position(3))
-
-        self.lst_op_3.addItem('ssa.v_gap')
-        self.lst_op_3.addItem('ssa.v_ctr')
-        self.lst_op_3.addItem('ssa.h_gap')
-        self.lst_op_3.addItem('ssa.h_ctr')
-        self.lst_op_3.addItem('ic3')
-        self.lst_op_3.addItem('ic4')
-        #self.lst_op_3.addItem('filter1')
-        #self.lst_op_3.addItem('filter2')
-        #self.lst_op_3.addItem('filter3')
-        #self.lst_op_3.addItem('filter4')
-        self.lb_op_3 = QLabel()
-        self.lb_op_3.setFixedWidth(w)
-        self.lb_op_3.setFixedHeight(h1)
-        self.lb_op_3.setStyleSheet(bkg)
-        self.lb_op_3.setFont(self.font2)
-        vbox_3 = QVBoxLayout()
-        vbox_3.addWidget(lb_3)
-        vbox_3.addWidget(self.lst_op_3)
-        vbox_3.addWidget(self.lb_op_3)
-        vbox_3.addStretch()
-        vbox_3.setAlignment(QtCore.Qt.AlignTop)
-        return vbox_3
-
-    def vbox_optics_box4(self):
-        # CM and TM
-        w = 140
-        h = 180
-        h1 = 30
-        bkg = 'background-color: rgb(240, 240, 240);'
-        lb_4 = QLabel()
-        lb_4.setText('CM, TM')
-        lb_4.setFont(self.font2)
-        lb_4.setFixedWidth(w)
-        self.lst_op_4 = QListWidget()
-        self.lst_op_4.setFixedWidth(w)
-        self.lst_op_4.setFixedHeight(h)
-        self.lst_op_4.setFont(self.font2)
-        self.lst_op_4.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.lst_op_4.itemClicked.connect(lambda: self.show_op_position(4))
-
-        self.lst_op_4.addItem('cm.x')
-        self.lst_op_4.addItem('cm.yaw')
-        self.lst_op_4.addItem('cm.y')
-        self.lst_op_4.addItem('cm.p')
-        self.lst_op_4.addItem('cm.r')
-        self.lst_op_4.addItem('tm.x')
-        self.lst_op_4.addItem('tm.yaw')
-        self.lst_op_4.addItem('tm.y')
-        self.lst_op_4.addItem('tm.p')
-        self.lst_op_4.addItem('tm.r')
-        self.lb_op_4 = QLabel()
-        self.lb_op_4.setFixedWidth(w)
-        self.lb_op_4.setFixedHeight(h1)
-        self.lb_op_4.setStyleSheet(bkg)
-        self.lb_op_4.setFont(self.font2)
-        vbox_4 = QVBoxLayout()
-        vbox_4.addWidget(lb_4)
-        vbox_4.addWidget(self.lst_op_4)
-        vbox_4.addWidget(self.lb_op_4)
-        vbox_4.addStretch()
-        vbox_4.setAlignment(QtCore.Qt.AlignTop)
-        return vbox_4
-
-    def vbox_optics_box5(self):
-        #dcm and pbsl
-        w = 140
-        h = 180
-        h1 = 30
-        bkg = 'background-color: rgb(240, 240, 240);'
-        lb_5 = QLabel()
-        lb_5.setText('pbsl, dcm, loadcell')
-        lb_5.setFont(self.font2)
-        lb_5.setFixedWidth(w)
-        self.lst_op_5 = QListWidget()
-        self.lst_op_5.setFixedWidth(w)
-        self.lst_op_5.setFixedHeight(h)
-        self.lst_op_5.setFont(self.font2)
-        self.lst_op_5.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.lst_op_5.itemClicked.connect(lambda: self.show_op_position(5))
-
-        self.lst_op_5.addItem('pbsl.x_gap')
-        self.lst_op_5.addItem('pbsl.x_ctr')
-        self.lst_op_5.addItem('pbsl.y_gap')
-        self.lst_op_5.addItem('pbsl.y_ctr')
-        #self.lst_op_5.addItem('dcm.eng')
-        self.lst_op_5.addItem('dcm.th1')
-        #self.lst_op_5.addItem('dcm.th2')
-        self.lst_op_5.addItem('dcm.dy2')
-        #self.lst_op_5.addItem('dcm.chi2')
-
-        # newly added loadcell
-        self.lst_op_5.addItem('pzt_tm_loadcell')
-        self.lst_op_5.addItem('pzt_cm_loadcell')
-
-        self.lb_op_5 = QLabel()
-        self.lb_op_5.setFixedWidth(w)
-        self.lb_op_5.setFixedHeight(h1)
-        self.lb_op_5.setStyleSheet(bkg)
-        self.lb_op_5.setFont(self.font2)
-        vbox_5 = QVBoxLayout()
-        vbox_5.addWidget(lb_5)
-        vbox_5.addWidget(self.lst_op_5)
-        vbox_5.addWidget(self.lb_op_5)
-        vbox_5.addStretch()
-        vbox_5.setAlignment(QtCore.Qt.AlignTop)
-        return vbox_5
-
-    def vbox_optics_box6(self):
-        # pzt
-        w = 140
-        h = 180
-        h1 = 30
-        bkg = 'background-color: rgb(240, 240, 240);'
-        lb_6 = QLabel()
-        lb_6.setText('pzt')
-        lb_6.setFont(self.font2)
-        lb_6.setFixedWidth(w)
-        self.lst_op_6 = QListWidget()
-        self.lst_op_6.setFixedWidth(w)
-        self.lst_op_6.setFixedHeight(h)
-        self.lst_op_6.setFont(self.font2)
-        self.lst_op_6.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.lst_op_6.itemClicked.connect(lambda: self.show_op_position(6))
-
-        #self.lst_op_6.addItem('pzt_dcm_chi2.pos')
-        #self.lst_op_6.addItem('pzt_dcm_th2.pos')
-        self.lst_op_6.addItem('pzt_tm_loadcell')
-        self.lst_op_6.addItem('pzt_cm_loadcell')
-        self.lb_op_6 = QLabel()
-        self.lb_op_6.setFixedWidth(w)
-        self.lb_op_6.setFixedHeight(h1)
-        self.lb_op_6.setStyleSheet(bkg)
-        self.lb_op_6.setFont(self.font2)
-
-        vbox_6 = QVBoxLayout()
-        vbox_6.addWidget(lb_6)
-        vbox_6.addWidget(self.lst_op_6)
-        vbox_6.addWidget(self.lb_op_6)
-        vbox_6.addStretch()
-        vbox_6.setAlignment(QtCore.Qt.AlignTop)
-        return vbox_6
-
-    def vbox_optics_box7(self):
-        # ic and camera
-        w = 140
-        h = 180
-        h1 = 30
-        bkg = 'background-color: rgb(240, 240, 240);'
-        lb_7 = QLabel()
-        lb_7.setText('ic, camera')
-        lb_7.setFont(self.font2)
-        lb_7.setFixedWidth(w)
-        self.lst_op_7 = QListWidget()
-        self.lst_op_7.setFixedWidth(w)
-        self.lst_op_7.setFixedHeight(h)
-        self.lst_op_7.setFont(self.font2)
-        self.lst_op_7.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.lst_op_7.itemClicked.connect(lambda: self.show_op_position(7))
-
-        self.lst_op_7.addItem('ic3')
-        self.lst_op_7.addItem('ic4')
-        self.lst_op_7.addItem('Andor')
-        self.lst_op_7.addItem('detA1')
-        self.lst_op_7.addItem('vlm')
-        self.lst_op_7.addItem('MFS')
-        self.lst_op_7.addItem('PMFS')
-        self.lst_op_7.addItem('WPFS')
-        self.lb_op_7 = QLabel()
-        self.lb_op_7.setFixedWidth(w)
-        self.lb_op_7.setFixedHeight(h1)
-        self.lb_op_7.setStyleSheet(bkg)
-        self.lb_op_7.setFont(self.font2)
-
-        vbox_7 = QVBoxLayout()
-        vbox_7.addWidget(lb_7)
-        vbox_7.addWidget(self.lst_op_7)
-        vbox_7.addWidget(self.lb_op_7)
-        vbox_7.addStretch()
-        vbox_7.setAlignment(QtCore.Qt.AlignTop)
-        return vbox_7
-    '''
+    
     def vbox_filter(self):
         lb_empty = QLabel()
-        lb_title = FixLabel(self.font1, 'SSA Filters')
+        lb_title = FixObj(QLabel, self.font1, 'SSA Filters').run()
 
         lb_sep = QLabel()
         lb_sep.setFixedHeight(10)
@@ -3806,26 +3011,24 @@ class App(QWidget):
         lb_empty4 = QLabel()
         lb_empty4.setFixedWidth(5)
 
-        lb_sep1 = FixLabel(self.font2, '', 0, 10)
-        lb_sep2 = FixLabel(self.font2, '', 0, 10)
-        lb_sep3 = FixLabel(self.font2, '', 0, 10)
+        lb_sep1 = FixObj(QLabel, self.font2, '', 0, 10).run()
+        lb_sep2 = FixObj(QLabel, self.font2, '', 0, 10).run()
+        lb_sep3 = FixObj(QLabel, self.font2, '', 0, 10).run()
 
-        lb_rec_eng_calib = QLabel()
-        lb_rec_eng_calib.setFont(self.font1)
-        lb_rec_eng_calib.setText('Record energy calibration position')
+        lb_rec_eng_calib = FixObj(QLabel, self.font1, 'Record energy calibration position').run()
 
-        self.pb_rec_eng_calib = FixButton(self.font2, 'record', 100)
+        self.pb_rec_eng_calib = FixObj(QPushButton, self.font2, 'record', 100).run()
         self.pb_rec_eng_calib.clicked.connect(self.record_eng_calib)
 
-        self.pb_rm_eng_calib = FixButton(self.font2, 'remove', 100)
+        self.pb_rm_eng_calib = FixObj(QPushButton, self.font2, 'remove', 100).run()
         self.pb_rm_eng_calib.clicked.connect(self.remove_eng_calib)
 
-        self.pb_rm_all_eng_calib = FixButton(self.font2, 'remove all', 100)
+        self.pb_rm_all_eng_calib = FixObj(QPushButton, self.font2, 'remove all', 100).run()
         self.pb_rm_all_eng_calib.clicked.connect(self.remove_eng_calib_all)
 
-        lb_rec_eng_id = FixLabel(self.font2, 'Pos ID:', 60)
+        lb_rec_eng_id = FixObj(QLabel, self.font2, 'Pos ID:', 60).run()
 
-        self.tx_rec_eng_id = FixEditor(self.font2, '1', 30)
+        self.tx_rec_eng_id = FixObj(QLineEdit, self.font2, '1', 30).run()
 
         hbox = QHBoxLayout()
         hbox.addWidget(lb_rec_eng_id)
@@ -3839,12 +3042,9 @@ class App(QWidget):
         vbox_pb.addWidget(self.pb_rm_eng_calib)
         vbox_pb.addWidget(self.pb_rm_all_eng_calib)
 
-        lb_rec_eng_recorded = FixLabel(self.font2, 'Recorded', 140)
+        lb_rec_eng_recorded = FixObj(QLabel, self.font2, 'Recorded', 140).run()
 
-        self.lst_eng_calib = QListWidget()
-        self.lst_eng_calib.setFixedWidth(140)
-        self.lst_eng_calib.setFixedHeight(160)
-        self.lst_eng_calib.setFont(self.font2)
+        self.lst_eng_calib = FixObj(QListWidget, self.font2, '', 140, 160).run()
         self.lst_eng_calib.itemClicked.connect(self.display_calib_eng_detail)
 
         vbox_recorded = QVBoxLayout()
@@ -3852,12 +3052,9 @@ class App(QWidget):
         vbox_recorded.addWidget(self.lst_eng_calib)
         vbox_recorded.setAlignment(QtCore.Qt.AlignTop)
 
-        lb_rec_eng_detail = FixLabel(self.font2, 'Motor pos', 160)
+        lb_rec_eng_detail = FixObj(QLabel, self.font2, 'Motor pos', 160).run()
 
-        self.tx_eng_calib = QPlainTextEdit()        
-        self.tx_eng_calib.setFixedWidth(180)
-        self.tx_eng_calib.setFixedHeight(160)
-        self.tx_eng_calib.setFont(self.font2)
+        self.tx_eng_calib = FixObj(QPlainTextEdit, self.font2, '', 180, 160).run()
         self.tx_eng_calib.setReadOnly(True)
 
         vbox_record_detail = QVBoxLayout()
@@ -3865,14 +3062,14 @@ class App(QWidget):
         vbox_record_detail.addWidget(self.tx_eng_calib)
         vbox_record_detail.setAlignment(QtCore.Qt.AlignTop)
 
-        lb_zp_mag = FixLabel(self.font2, 'ZP Mag:', 80)
-        self.lb_zp_mag = FixLabel(self.font2, '', 80)
+        lb_zp_mag = FixObj(QLabel, self.font2, 'ZP Mag:', 80).run()
+        self.lb_zp_mag = FixObj(QLabel, self.font2, '', 80).run()
         
-        lb_current_mag = FixLabel(self.font2, 'TXM Mag:', 80)
-        self.lb_current_mag = FixLabel(self.font2, '', 80)
+        lb_current_mag = FixObj(QLabel, self.font2, 'TXM Mag:', 80).run()
+        self.lb_current_mag = FixObj(QLabel, self.font2, '', 80).run()
 
-        lb_pix_size = FixLabel(self.font2, 'Pixel:', 80)
-        self.lb_pix_size = FixLabel(self.font2, '', 80)
+        lb_pix_size = FixObj(QLabel, self.font2, 'Pixel:', 80).run()
+        self.lb_pix_size = FixObj(QLabel, self.font2, '', 80).run()
         
         hbox_zp_mag = QHBoxLayout()
         hbox_zp_mag.addWidget(lb_zp_mag)
@@ -4041,13 +3238,13 @@ class App(QWidget):
     def vbox_load_external_py_file(self):
         lb_empty = QLabel()
         lb_empty2 = QLabel()
-        lb_external_file = FixLabel(self.font1, 'Load external .py file:', 180)
-        self.pb_ext_file = FixButton(self.font2, 'Open and Load', 150)
+        lb_external_file = FixObj(QLabel, self.font1, 'Load external .py file:', 180).run()
+        self.pb_ext_file = FixObj(QPushButton, self.font2, 'Open and Load', 150).run()
         self.pb_ext_file.clicked.connect(self.fun_load_ext_py_file)
-        self.tx_ext_file_msg = QPlainTextEdit()
-        self.tx_ext_file_msg.setFont(self.font2)
-        self.tx_ext_file_msg.setFixedHeight(200)
-        self.tx_ext_file_msg.setFixedWidth(600)
+        self.tx_ext_file_msg = FixObj(QPlainTextEdit, self.font2, '', 600, 200).run()
+        #self.tx_ext_file_msg.setFont(self.font2)
+        #self.tx_ext_file_msg.setFixedHeight(200)
+        #self.tx_ext_file_msg.setFixedWidth(600)
 
         hbox = QHBoxLayout()
         hbox.addWidget(lb_external_file)
@@ -4085,12 +3282,12 @@ class App(QWidget):
 
     def vbox_global_var_msg(self):
         lb_empty2 = QLabel()        
-        lb_msg = FixLabel(self.font1, 'Python input', 120, 27)
+        lb_msg = FixObj(QLabel, self.font1, 'Python input', 120, 27).run()
 
-        self.tx_var_file_msg = QPlainTextEdit()
-        self.tx_var_file_msg.setFont(self.font2)
-        self.tx_var_file_msg.setFixedHeight(260)
-        self.tx_var_file_msg.setFixedWidth(250)
+        self.tx_var_file_msg = FixObj(QPlainTextEdit, self.font2, '', 250, 200).run()
+        #self.tx_var_file_msg.setFont(self.font2)
+        #self.tx_var_file_msg.setFixedHeight(200)
+        #self.tx_var_file_msg.setFixedWidth(250)
 
         vbox = QVBoxLayout()
         vbox.addWidget(lb_msg)
@@ -4101,12 +3298,12 @@ class App(QWidget):
 
     def hbox_global_var_button(self): 
         lb_empty = QLabel()
-        lb_sep = FixLabel(self.font2, '', 0, 10)
-        self.lb_var_msg = FixLabel(self.font2, 'Msg: ', 400)
-        self.pb_var_file = FixButton(self.font2, 'Execute', 80, 40)
+        lb_sep = FixObj(QLabel, self.font2, '', 0, 10).run()
+        self.lb_var_msg = FixObj(QLabel, self.font2, 'Msg: ', 400).run()
+        self.pb_var_file = FixObj(QPushButton, self.font2, 'Execute', 80, 40).run()
         self.pb_var_file.clicked.connect(self.define_global_var)
 
-        self.pb_var_save = FixButton(self.font2, 'Save', 80, 40)
+        self.pb_var_save = FixObj(QPushButton, self.font2, 'Save', 80, 40).run()
         self.pb_var_save.clicked.connect(self.save_var_to_file)
 
         hbox_button = QHBoxLayout()
@@ -4119,11 +3316,12 @@ class App(QWidget):
         return hbox_button
 
     def vbox_global_var_name_list(self):
-        lb_var_list = FixLabel(self.font1, 'Var.', 70, 27)
-        self.lst_saved_var = QListWidget()
-        self.lst_saved_var.setFixedHeight(260)
-        self.lst_saved_var.setFixedWidth(150)
-        self.lst_saved_var.setFont(self.font2)
+        lb_var_list = FixObj(QLabel, self.font1, 'Var.', 70, 27).run()
+
+        self.lst_saved_var = FixObj(QListWidget, self.font2, '', 150, 200).run()
+        #self.lst_saved_var.setFixedHeight(200)
+        #self.lst_saved_var.setFixedWidth(150)
+        #self.lst_saved_var.setFont(self.font2)
         self.lst_saved_var.itemClicked.connect(self.show_varible_value)
         vbox = QVBoxLayout()
         vbox.addWidget(lb_var_list)
@@ -4133,11 +3331,8 @@ class App(QWidget):
         return vbox
 
     def vbox_global_var_value_list(self):
-        lb_value_list = FixLabel(self.font1, 'Value', 70, 27)
-        self.lst_saved_var_value = QListWidget()
-        self.lst_saved_var_value.setFixedHeight(260)
-        self.lst_saved_var_value.setFixedWidth(250)
-        self.lst_saved_var_value.setFont(self.font2)
+        lb_value_list = FixObj(QLabel, self.font1, 'Value', 70, 27).run()
+        self.lst_saved_var_value = FixObj(QListWidget, self.font2, '', 250, 200).run()
         vbox = QVBoxLayout()
         vbox.addWidget(lb_value_list)
         vbox.addWidget(self.lst_saved_var_value)
@@ -4146,11 +3341,11 @@ class App(QWidget):
         return vbox
 
     def vbox_global_var_value_editor(self):
-        self.tx_saved_var_value = QPlainTextEdit()
-        self.tx_saved_var_value.setFixedHeight(260)
-        self.tx_saved_var_value.setFixedWidth(220)
-        self.tx_saved_var_value.setFont(self.font3)
-        lb_value_list = FixLabel(self.font1, 'Value', 70, 27)
+        self.tx_saved_var_value = FixObj(QPlainTextEdit, self.font2, 260, 200).run()
+        #self.tx_saved_var_value.setFixedHeight(200)
+        #self.tx_saved_var_value.setFixedWidth(260)
+        #self.tx_saved_var_value.setFont(self.font2)
+        lb_value_list = FixObj(QLabel, self.font1, 'Value', 70, 27).run()
         vbox = QVBoxLayout()
         vbox.addWidget(lb_value_list)
         vbox.addWidget(self.tx_saved_var_value)
@@ -4160,9 +3355,9 @@ class App(QWidget):
 
 
     def vbox_global_var_command_list(self):
-        lb_var_list_comm = FixLabel(self.font1, 'Command history', 160, 27)
-        self.lst_saved_var_comm = QListWidget()
-        self.lst_saved_var_comm.setFixedHeight(260)
+        lb_var_list_comm = FixObj(QLabel, self.font1, 'Command history', 160, 27).run()
+        self.lst_saved_var_comm = FixObj(QListWidget, self.font2, '', 220, 200).run()
+        self.lst_saved_var_comm.setFixedHeight(200)
         self.lst_saved_var_comm.setFixedWidth(220)
         self.lst_saved_var_comm.setFont(self.font2)
         vbox = QVBoxLayout()
@@ -4173,11 +3368,8 @@ class App(QWidget):
         return vbox
 
     def vbox_global_var_value(self):
-        lb_var_list_val = FixLabel(self.font1, 'Value', 120)
-        self.lst_saved_var_val = QListWidget()
-        self.lst_saved_var_val.setFixedHeight(200)
-        self.lst_saved_var_val.setFixedWidth(240)
-        self.lst_saved_var_val.setFont(self.font3)
+        lb_var_list_val = FixObj(QLabel, self.font1, 'Value', 120).run()
+        self.lst_saved_var_val = FixObj(QListWidget, self.font3, '', 240, 200).run()
         vbox = QVBoxLayout()
         vbox.addWidget(lb_var_list_val)
         vbox.addWidget(self.lst_saved_var_val)
@@ -4554,7 +3746,6 @@ def convert_epics_to_string(file_lines):
         lines_copy[i] = arg_name + ': ' + arg_val + ','  
     return lines_copy
 
-
 def extract_variable(file_name):
     # get defined variable from .py file
     # exclude variable defined inside "function" and "class"
@@ -4573,7 +3764,7 @@ def extract_variable(file_name):
             try:
                 #val = eval(t[1])
                 arg_name.append(t[0])
-                val = eval(arg_name[0])                
+                val = eval(arg_name[-1])                
                 arg_command.append(t[1].replace('\n', ''))
                 arg_value.append(val)
             except:
