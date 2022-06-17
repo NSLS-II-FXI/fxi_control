@@ -10,6 +10,7 @@ def fxi_load_scan_list_common():
         'sleep_time': 1.0, 
         'plot_flag': 0, 
         'simu': False, 
+        'mv_back': True, 
         'introduction': ''' Description:
  '''
     }
@@ -312,13 +313,14 @@ def fxi_load_scan_list_common():
     txm_xanes_scan = {
         'eng_list': [], 
         'exposure_time': 0.1, 
-        'chunk_size': 5, 
+        'chunk_size': 2, 
         'out_x': 0, 
         'out_y': 0, 
         'out_z': 0, 
         'out_r': 0, 
         'simu': False, 
         'relative_move_flag': 1, 
+        'filters': [], 
         'rot_first_flag': 1, 
         'introduction': ''' Description:
  '''

@@ -445,10 +445,13 @@ class Motor_base():
         except:
             ss = 0
             self.editor_step_size.setText('0')
+        '''
         try:
             current_pos = float(self.editor_setpos.text())
         except:
             current_pos = self.mot.position
+        '''
+        current_pos = self.mot.position
         if direction == 'plus':
             self.editor_setpos.setText(f'{(current_pos + ss):4.3f}')
         elif direction == 'minus':
@@ -1939,15 +1942,17 @@ class App(QWidget):
             pos = item[0].text()
             x, y = self.pos[pos]['x'], self.pos[pos]['y']
             z, r = self.pos[pos]['z'], self.pos[pos]['r']
-            self.tx_setpos_x.setText(f'{x:4.3f}')
-            self.tx_setpos_y.setText(f'{y:4.3f}')
-            self.tx_setpos_z.setText(f'{z:4.3f}')
-            self.tx_setpos_r.setText(f'{r:4.3f}')
 
-            self.move_to_pos('x')
-            self.move_to_pos('y')
-            self.move_to_pos('z')
-            self.move_to_pos('r')
+            self.mot_sample_x.editor_setpos.setText(f'{x:4.3f}')
+            self.mot_sample_y.editor_setpos.setText(f'{y:4.3f}')
+            self.mot_sample_z.editor_setpos.setText(f'{z:4.3f}')
+            self.mot_sample_r.editor_setpos.setText(f'{r:4.3f}')
+
+            self.mot_sample_x.fun_move_to_pos()
+            self.mot_sample_y.fun_move_to_pos()
+            self.mot_sample_z.fun_move_to_pos()
+            self.mot_sample_r.fun_move_to_pos()
+
 
     def pos_record_bkg(self):
         x = float(self.mot_sample_x.label_motor_pos.text())
