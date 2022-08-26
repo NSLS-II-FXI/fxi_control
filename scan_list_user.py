@@ -1,5 +1,77 @@
 def fxi_load_scan_list_user():
     scan_list = {}
+    txm__multi_pos_xanes_2D_xh = {
+        'eng_list': [], 
+        'x_list': None, 
+        'y_list': None, 
+        'z_list': None, 
+        'r_list': None, 
+        'out_x': None, 
+        'out_y': None, 
+        'out_z': None, 
+        'out_r': None, 
+        'repeat_num': 1, 
+        'exposure_time': 0.2, 
+        'sleep_time': 1, 
+        'chunk_size': 5, 
+        'simu': False, 
+        'relative_move_flag': True, 
+        'flts': [], 
+        'enable_z': True, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
+    txm__multi_pos_xanes_3D_xh = {
+        'eng_list': [], 
+        'x_list': None, 
+        'y_list': None, 
+        'z_list': None, 
+        'r_list': None, 
+        'start_angle': None, 
+        'exposure_time': 0.05, 
+        'relative_rot_angle': 185, 
+        'period': 0.05, 
+        'out_x': 0, 
+        'out_y': 0, 
+        'out_z': 0, 
+        'out_r': 0, 
+        'rs': 2, 
+        'simu': False, 
+        'relative_move_flag': 1, 
+        'rot_first_flag': 1, 
+        'sleep_time': 0, 
+        'flts': [], 
+        'repeat': 1, 
+        'ref_flat_scan': False, 
+        'enable_z': True, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
+    txm_xanes_3D_xh = {
+        'eng_list': [], 
+        'exposure_time': 0.05, 
+        'start_angle': None, 
+        'relative_rot_angle': 180, 
+        'period': 0.06, 
+        'out_x': None, 
+        'out_y': None, 
+        'out_z': None, 
+        'out_r': None, 
+        'rs': 4, 
+        'simu': False, 
+        'relative_move_flag': 1, 
+        'rot_first_flag': 1, 
+        'flts': [], 
+        'enable_z': True, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
     txm_damon_scan = {
         'eng_list1': [], 
         'eng_list2': [], 
@@ -35,7 +107,7 @@ def fxi_load_scan_list_user():
         'simu': False, 
         'relative_move_flag': 1, 
         'rot_first_flag': 1, 
-        'filters': [], 
+        'flts': [], 
         'rot_back_velo': 30, 
         'repeat': 1, 
         'introduction': ''' Description:
@@ -55,10 +127,11 @@ def fxi_load_scan_list_user():
         'rs': 3, 
         'relative_move_flag': 1, 
         'rot_first_flag': 1, 
-        'filters': [], 
+        'flts': [], 
         'rot_back_velo': 30, 
         'move_to_ini_pos': True, 
         'simu': False, 
+        'enable_z': True, 
         'introduction': ''' Description:
  '''
     }
@@ -76,12 +149,13 @@ def fxi_load_scan_list_user():
         'rs': 3, 
         'relative_move_flag': 1, 
         'rot_first_flag': 1, 
-        'filters': [], 
+        'flts': [], 
         'rot_back_velo': 30, 
         'move_to_ini_pos': True, 
         'simu': False, 
         'noDark': False, 
         'noFlat': False, 
+        'enable_z': True, 
         'introduction': ''' Description:
  '''
     }
@@ -111,24 +185,6 @@ def fxi_load_scan_list_user():
         'out_r': 0, 
         'repeat_num': 1, 
         'sleep_time': 1, 
-        'introduction': ''' Description:
- '''
-    }
-
-
-    txm_ming_scan = {
-        'introduction': ''' Description:
- '''
-    }
-
-
-    txm_ming_scan2 = {
-        'introduction': ''' Description:
- '''
-    }
-
-
-    txm_ming_scan3 = {
         'introduction': ''' Description:
  '''
     }
@@ -175,6 +231,7 @@ def fxi_load_scan_list_user():
         'out_r': None, 
         'start_angle': None, 
         'rel_rot_ang': 180, 
+        'flts': [], 
         'relative_move_flag': True, 
         'simu': False, 
         'introduction': ''' Description:
@@ -185,7 +242,7 @@ def fxi_load_scan_list_user():
     txm_multi_edge_xanes = {
         'elements': ['Ni_wl'], 
         'scan_type':"3D",
-        'filters': {'Ni_filters': [1, 2, 3]}, 
+        'flts': {'Ni_filters': [1, 2, 3]}, 
         'exposure_time': {'Ni_exp': 0.05}, 
         'rel_rot_ang': 185, 
         'rs': 1, 
@@ -194,6 +251,8 @@ def fxi_load_scan_list_user():
         'chunk_size': 5, 
         'relative_move_flag': 0, 
         'simu': False, 
+        'ref_flat_scan': False, 
+        'enable_z': True, 
         'introduction': ''' Description:
  '''
     }
@@ -202,9 +261,11 @@ def fxi_load_scan_list_user():
     txm_multi_edge_xanes2 = {
         'elements': ['Ni_wl'], 
         'scan_type':"3D",
-        'filters': {'Ni_filters': [1, 2, 3]}, 
+        'flts': {'Ni_filters': [1, 2, 3]}, 
         'exposure_time': {'Ni_exp': 0.05}, 
+        'period_time': {'Ni_period': 0.05}, 
         'rel_rot_ang': 185, 
+        'start_angle': None, 
         'rs': 1, 
         'in_pos_list': [[None, None, None, None]], 
         'out_pos': [None, None, None, None], 
@@ -214,6 +275,8 @@ def fxi_load_scan_list_user():
         'simu': False, 
         'sleep': 0, 
         'repeat': None, 
+        'ref_flat_scan': False, 
+        'enable_z': True, 
         'introduction': ''' Description:
  '''
     }
@@ -221,19 +284,21 @@ def fxi_load_scan_list_user():
 
     txm_multi_pos_2D_and_3D_xanes = {
         'elements': ['Ni_wl'], 
-        'filters': {'Ni_filters': [1, 2, 3]}, 
-        'sam_in_pos_list_2D': {'Ni_2D_in_pos_list': [[0, 0, 0, 0]]}, 
-        'sam_out_pos_list_2D': {'Ni_2D_out_pos_list': [[0, 0, 0, 0]]}, 
-        'sam_in_pos_list_3D': {'Ni_3D_in_pos_list': [[0, 0, 0, 0]]}, 
-        'sam_out_pos_list_3D': {'Ni_3D_out_pos_list': [[0, 0, 0, 0]]}, 
+        'flts': {'Ni_filters': [1, 2, 3]}, 
+        'sam_in_pos_list_2D': {'Ni_2D_in_pos_list': [[None, None, None, None]]}, 
+        'sam_out_pos_list_2D': {'Ni_2D_out_pos_list': [None, None, None, None]}, 
+        'sam_in_pos_list_3D': {'Ni_3D_in_pos_list': [[None, None, None, None]]}, 
+        'sam_out_pos_list_3D': {'Ni_3D_out_pos_list': [None, None, None, None]}, 
         'exposure_time_2D': {'Ni_2D_exp': 0.05}, 
         'exposure_time_3D': {'Ni_3D_exp': 0.05}, 
         'rel_rot_ang': 185, 
         'rs': 1, 
         'sleep_time': 0, 
         'repeat_num': 1, 
+        'chunk_size': 5, 
         'relative_move_flag': 0, 
         'simu': False, 
+        'enable_z': True, 
         'introduction': ''' Description:
  '''
     }
@@ -288,6 +353,31 @@ def fxi_load_scan_list_user():
     }
 
 
+    txm_rock_scan = {
+        'exp_t': 0.05, 
+        'period': 0.05, 
+        't_span': 10, 
+        'start_angle': None, 
+        'rel_rot_ang': 30, 
+        'out_x': None, 
+        'out_y': None, 
+        'out_z': None, 
+        'out_r': None, 
+        'rs': 30, 
+        'relative_move_flag': 1, 
+        'rot_first_flag': 1, 
+        'rot_back_velo': 30, 
+        'flts': [], 
+        'move_to_ini_pos': True, 
+        'simu': False, 
+        'noDark': False, 
+        'noFlat': False, 
+        'enable_z': True, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
     txm_scan_change_expo_time = {
         'x_range': None, 
         'y_range': None, 
@@ -327,7 +417,7 @@ def fxi_load_scan_list_user():
         'simu': False, 
         'relative_move_flag': 1, 
         'traditional_sequence_flag': 1, 
-        'filters': [], 
+        'flts': [], 
         'introduction': ''' Description:
  '''
     }
@@ -346,7 +436,7 @@ def fxi_load_scan_list_user():
         'simu': False, 
         'relative_move_flag': 1, 
         'traditional_sequence_flag': 1, 
-        'filters': [], 
+        'flts': [], 
         'introduction': ''' Description:
  '''
     }
@@ -438,15 +528,15 @@ def fxi_load_scan_list_user():
     }
 
 
+    scan_list["txm__multi_pos_xanes_2D_xh"] = txm__multi_pos_xanes_2D_xh
+    scan_list["txm__multi_pos_xanes_3D_xh"] = txm__multi_pos_xanes_3D_xh
+    scan_list["txm__xanes_3D_xh"] = txm__xanes_3D_xh
     scan_list["txm_damon_scan"] = txm_damon_scan
     scan_list["txm_dummy_scan"] = txm_dummy_scan
     scan_list["txm_fly_scan2"] = txm_fly_scan2
     scan_list["txm_fly_scan3"] = txm_fly_scan3
     scan_list["txm_grid_z_scan"] = txm_grid_z_scan
     scan_list["txm_insitu_xanes_scan"] = txm_insitu_xanes_scan
-    scan_list["txm_ming_scan"] = txm_ming_scan
-    scan_list["txm_ming_scan2"] = txm_ming_scan2
-    scan_list["txm_ming_scan3"] = txm_ming_scan3
     scan_list["txm_mosaic_fly_scan"] = txm_mosaic_fly_scan
     scan_list["txm_mosaic_fly_scan_xh"] = txm_mosaic_fly_scan_xh
     scan_list["txm_multi_edge_xanes"] = txm_multi_edge_xanes
@@ -455,6 +545,7 @@ def fxi_load_scan_list_user():
     scan_list["txm_multi_pos_2D_xanes_and_3D_tomo"] = txm_multi_pos_2D_xanes_and_3D_tomo
     scan_list["txm_multi_pos_3D_xanes"] = txm_multi_pos_3D_xanes
     scan_list["txm_qingchao_scan"] = txm_qingchao_scan
+    scan_list["txm_rock_scan"] = txm_rock_scan
     scan_list["txm_scan_change_expo_time"] = txm_scan_change_expo_time
     scan_list["txm_tmp_scan"] = txm_tmp_scan
     scan_list["txm_user_fly_scan"] = txm_user_fly_scan

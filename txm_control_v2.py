@@ -4,6 +4,7 @@ import numpy as np
 import os
 import threading
 import time
+import json
 from PyQt5 import QtGui, QtCore
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSignal, pyqtSlot, QProcess, QTextCodec
 from PyQt5.QtWidgets import (QMainWindow, QFileDialog, QRadioButton, QApplication, QWidget, QFrame,
@@ -208,10 +209,12 @@ class Shutter():
 
     def pb_open_shutter(self):
         self.obj.open_shutter = FixObj(QPushButton, self.font2, 'Open shutter', 120, 40).run()
+        self.obj.open_shutter.setStyleSheet('color: rgb(50, 200, 50);')
         return self.obj.open_shutter
 
     def pb_close_shutter(self):
         self.obj.close_shutter = FixObj(QPushButton, self.font2, 'Close shutter', 120, 40).run()
+        self.obj.close_shutter.setStyleSheet('color: rgb(200, 50, 50);')
         return self.obj.close_shutter
 
     def lb_beam_current(self):
@@ -457,8 +460,7 @@ class Motor_base():
         elif direction == 'minus':
             self.editor_setpos.setText(f'{(current_pos - ss):4.3f}')
         else:
-            self.editor_setpos.setText(f'{(current_pos):4.3f}')
-        
+            self.editor_setpos.setText(f'{(current_pos):4.3f}')       
         self.fun_move_to_pos()    
     
     def fun_update_status(self, current_pos):
@@ -488,6 +490,9 @@ class Motor_layout(Motor_base):
         self.editor_reset_reading.setText((f'{current_pos:4.4f}'))
         self.editor_step_size.setText('0')
 
+    def init_pos_display_sample(self):
+        pass
+
     def pb_button_reset_reading(self):
         self.obj.pb_set_read = FixObj(QPushButton, self.font2, 'Reset to:', 110).run()
         return self.obj.pb_set_read
@@ -506,6 +511,7 @@ class Motor_layout(Motor_base):
         RE(mv(self.mot.motor_calib, 1)) # change calibration to "SET"
         RE(mv(self.mot, val))
         RE(mv(self.mot.motor_calib, 0))
+        self.init_pos_display_sample()
         #self.label_motor_pos.setText(f'{val:4.4f}')
 
     def layout(self):
@@ -514,7 +520,7 @@ class Motor_layout(Motor_base):
         lb_motor = FixObj(QLabel, self.font1, self.motor_label + ':', 75).run()
         lb_motor.setAlignment(QtCore.Qt.AlignVCenter)
         lb_unit = self.lb_unit()
-
+        self.step_unit = lb_unit[2]
         hbox = QHBoxLayout()
         hbox.addWidget(lb_motor)
         hbox.addWidget(self.label_motor_pos)
@@ -524,7 +530,7 @@ class Motor_layout(Motor_base):
 
         hbox.addWidget(self.button_step_minus)
         hbox.addWidget(self.editor_step_size)
-        hbox.addWidget(lb_unit[2])
+        hbox.addWidget(self.step_unit)
         hbox.addWidget(self.button_step_plus)
         hbox.addWidget(lb_empty)
 
@@ -553,6 +559,21 @@ class PZT_th2_chi2(Motor_layout):
         self.editor_setpos.setText(f'{current_pos:4.4f}')
         self.editor_step_size.setText(f'{step_size:4.4f}')
 
+    def fun_move_plus_minus(self, direction='plus'):
+        try:
+            ss = float(self.editor_step_size.text())
+        except:
+            ss = 0
+            self.editor_step_size.setText('0')
+        current_pos = self.mot.get()[0]
+        if direction == 'plus':
+            self.editor_setpos.setText(f'{(current_pos + ss):4.3f}')
+        elif direction == 'minus':
+            self.editor_setpos.setText(f'{(current_pos - ss):4.3f}')
+        else:
+            self.editor_setpos.setText(f'{(current_pos):4.3f}')        
+        self.fun_move_to_pos()  
+
     def fun_move_to_pos(self):
         try:
             val = np.float(self.editor_setpos.text())
@@ -563,7 +584,6 @@ class PZT_th2_chi2(Motor_layout):
 
     def layout(self):
         lb_empty = FixObj(QLabel, None, '', 10).run()
-
         lb_motor = FixObj(QLabel, self.font1, self.motor_label+':', 75).run()
         lb_motor.setAlignment(QtCore.Qt.AlignVCenter)
         lb_unit = self.lb_unit()
@@ -594,16 +614,15 @@ class DCM_th2_chi2(Motor_layout):
     def init_motor_component_dcm(self):
         self.button_feedback_enable = self.pb_button_feedback_enable()
         self.editor_feedback_val = self.tx_editor_feedback_val()
-
+        
     def init_connect_function_dcm(self):
         self.button_feedback_enable.clicked.connect(self.fun_enable_feedback)
         self.editor_feedback_val.returnPressed.connect(self.fun_change_feedback_val)
 
-
     def init_pos_display_motor_dcm(self):
         feedback_val = self.mot.feedback.get()
         feedback_status = self.mot.feedback_enable.get()
-        self.editor_feedback_val.setText(f'{feedback_val:2.4f}')
+        self.editor_feedback_val.setText(f'{feedback_val:2.6f}')
         if feedback_status == 1:
             self.button_feedback_enable.setText('Feedback On')
             self.button_feedback_enable.setStyleSheet('color: rgb(200, 50, 50);')
@@ -655,6 +674,9 @@ class DCM_th2_chi2(Motor_layout):
         self.obj.tx_feedback_val.setValidator(QDoubleValidator()) 
         return self.obj.tx_feedback_val
 
+    def fun_update_status(self, current_pos):
+        self.label_motor_pos.setText(f'{current_pos:4.6f}')
+
     def layout(self):
         lb_empty = QLabel()
         lb_empty.setFixedWidth(10)
@@ -698,13 +720,26 @@ class Sample_motor_layout(Motor_layout):
             pass  
     
     def lb_pos_limit(self):
-        self.obj.lb_limit = FixObj(QLabel, self.font2, '(-4000, 4000)', 140).run()
+        self.obj.lb_limit = FixObj(QLabel, self.font2, '(-4000, 4000)', 120).run()
         return self.obj.lb_limit 
+
+    def pb_button_reset_reading(self):
+        self.obj.pb_set_read = FixObj(QPushButton, self.font2, 'Reset to:', 100).run()
+        self.obj.pb_set_read.setVisible(False)
+        return self.obj.pb_set_read
+
+    def tx_editor_reset_reading(self):
+        self.obj.tx_set_read = FixObj(QLineEdit, self.font2, '', 80).run()
+        self.obj.tx_set_read.setValidator(QDoubleValidator()) 
+        self.obj.tx_set_read.setVisible(False)
+        return self.obj.tx_set_read
+
 
     def layout(self):
         lb_empty = FixObj(QLabel, None, '', 10).run()
         lb_motor = FixObj(QLabel, self.font1, self.motor_label + ':', 75).run()
         lb_unit = self.lb_unit()
+        self.step_unit = lb_unit[2]
 
         hbox = QHBoxLayout()
         hbox.addWidget(lb_motor)
@@ -715,8 +750,10 @@ class Sample_motor_layout(Motor_layout):
         hbox.addWidget(self.label_lb_pos_limit)
         hbox.addWidget(self.button_step_minus)
         hbox.addWidget(self.editor_step_size)
-        hbox.addWidget(lb_unit[2])
+        hbox.addWidget(self.step_unit)
         hbox.addWidget(self.button_step_plus)
+        hbox.addWidget(self.button_reset_reading)
+        hbox.addWidget(self.editor_reset_reading)
         hbox.addWidget(lb_empty)
         hbox.setAlignment(QtCore.Qt.AlignLeft)
         return hbox
@@ -727,12 +764,17 @@ class XEng_motor_layout(Motor_layout):
         self.label_eng_calib = self.lb_eng_calib()
 
     def lb_eng_calib(self):
-        self.obj.lb_eng_calib = FixObj(QLabel, self.font2, '(calib. energy)', 300).run()
+        self.obj.lb_eng_calib = FixObj(QLabel, self.font2, '(calib. energy)', 320).run()
         return self.obj.lb_eng_calib
 
     def layout(self):
         lb_empty = QLabel()
         lb_empty.setFixedWidth(10)
+        self.cbox_dcm_only = QCheckBox('Moving DCM only')
+        self.cbox_dcm_only.setFixedWidth(160)
+        self.cbox_dcm_only.setFont(self.font2)
+        self.cbox_dcm_only.setChecked(False)
+        self.cbox_dcm_only.setVisible(False)
         lb_motor = FixObj(QLabel, self.font1, self.motor_label + ':', 75).run()
         lb_unit = self.lb_unit()
 
@@ -742,11 +784,11 @@ class XEng_motor_layout(Motor_layout):
         hbox.addWidget(lb_unit[0])
         hbox.addWidget(self.editor_setpos)
         hbox.addWidget(lb_unit[1])
-
         hbox.addWidget(self.label_eng_calib)
+        hbox.addWidget(self.cbox_dcm_only)
         hbox.addWidget(lb_empty)
-
         hbox.setAlignment(QtCore.Qt.AlignLeft)
+        
         return hbox
 
     def fun_move_to_pos(self):
@@ -754,7 +796,11 @@ class XEng_motor_layout(Motor_layout):
         if flag:
             try:
                 self.editor_setpos.setDisabled(True)
-                RE(move_zp_ccd(val))
+                if self.cbox_dcm_only.isChecked():
+                    print('move dcm only\n')
+                    RE(mv(XEng, val))
+                else:
+                    RE(move_zp_ccd(val))
             except:
                 msg = f'fails to move {self.motor_name}'
                 print(msg)
@@ -949,11 +995,11 @@ class App(QWidget):
         return gpbox
 
     def layout_motor(self):
-        lb_empty = FixObj(QLabel, None, '', 40).run()
+        lb_empty = FixObj(QLabel, None, '', 30).run()
         
-        lb_empty1 = FixObj(QLabel, None, '', 40).run()
+        lb_empty1 = FixObj(QLabel, None, '', 30).run()
         
-        lb_empty2 = FixObj(QLabel, None, '', 40).run()
+        lb_empty2 = FixObj(QLabel, None, '', 10).run()
         
         gpbox = QGroupBox('Sample position')
         gpbox.setFont(self.font1)
@@ -1029,10 +1075,10 @@ class App(QWidget):
 
         self.lst_scan_pos = FixObj(QListWidget, self.font2, '', 100, 120).run()
 
-        self.pb_pos_rm_select = FixObj(QPushButton, self.font2, 'remove', 100).run()
+        self.pb_pos_rm_select = FixObj(QPushButton, self.font2, 'Remove', 90).run()
         self.pb_pos_rm_select.clicked.connect(self.pos_remove_select)
 
-        self.pb_pos_rm_all_select = FixObj(QPushButton, self.font2, 'remove all', 100).run()
+        self.pb_pos_rm_all_select = FixObj(QPushButton, self.font2, 'Rmv. all', 90).run()
         self.pb_pos_rm_all_select.clicked.connect(self.pos_remove_all_select)
 
         lb_note1 = FixObj(QLabel, self.font2, '1. if empty, use current pos.', 230, 30).run()
@@ -1059,25 +1105,27 @@ class App(QWidget):
 
         return vbox
        
-
     def vbox_pos_list(self):
+        sep = FixObj(QLabel, None, '', 170, 2).run()
+        sep.setStyleSheet('background-color: rgb(0, 80, 255);')
+
         lb_pos = FixObj(QLabel, self.font1,'Position saved', 160).run() 
 
         lb_pos_x = FixObj(QLabel, self.font2, 'x:', 20).run()
 
-        self.lb_pos_x = FixObj(QLabel, self.font2, '', 75).run()
+        self.lb_pos_x = FixObj(QLabel, self.font2, '', 95).run()
 
         lb_pos_y = FixObj(QLabel, self.font2, 'y:', 20).run()
 
-        self.lb_pos_y = FixObj(QLabel, self.font2, '', 75).run()
+        self.lb_pos_y = FixObj(QLabel, self.font2, '', 95).run()
 
         lb_pos_z = FixObj(QLabel, self.font2, 'z:', 20).run()
 
-        self.lb_pos_z = FixObj(QLabel, self.font2, '', 75).run()
+        self.lb_pos_z = FixObj(QLabel, self.font2, '', 95).run()
 
         lb_pos_r = FixObj(QLabel, self.font2, 'r:', 20).run()
         
-        self.lb_pos_r = FixObj(QLabel, self.font2, '', 75).run()
+        self.lb_pos_r = FixObj(QLabel, self.font2, '', 95).run()
 
         hbox_pos1 = QHBoxLayout()
         hbox_pos1.addWidget(lb_pos_x)
@@ -1097,24 +1145,30 @@ class App(QWidget):
         self.lst_pos.itemClicked.connect(self.show_pos_clicked)
         self.lst_pos.setSelectionMode(QAbstractItemView.SingleSelection)
 
-        self.pb_pos_rec = FixObj(QPushButton, self.font2, 'record', 100).run()
+        self.pb_pos_rec = FixObj(QPushButton, self.font2, 'Record', 80).run()
         self.pb_pos_rec.clicked.connect(self.pos_record)
 
-        self.pb_pos_out = FixObj(QPushButton, self.font2, 'bkg. pos', 100).run()
+        self.pb_pos_out = FixObj(QPushButton, self.font2, 'Bkg. pos', 80).run()
         self.pb_pos_out.clicked.connect(self.pos_record_bkg)
 
-        self.pb_pos_rm = FixObj(QPushButton, self.font2, 'remove', 100).run()
+        self.pb_pos_save = FixObj(QPushButton, self.font2, 'Save pos.', 80).run()
+        self.pb_pos_save.clicked.connect(self.pos_save)
 
-        self.pb_pos_rm_all = FixObj(QPushButton, self.font2, 'remove all', 100).run()
+        self.pb_pos_load_last = FixObj(QPushButton, self.font2, 'Load pos.', 80).run()
+        self.pb_pos_load_last.clicked.connect(self.pos_load_last)
+
+        self.pb_pos_rm = FixObj(QPushButton, self.font2, 'Remove', 80).run()
+
+        self.pb_pos_rm_all = FixObj(QPushButton, self.font2, 'Rmv. all', 80).run()
         self.pb_pos_rm_all.clicked.connect(self.pos_remove_all)
 
-        self.pb_pos_update = FixObj(QPushButton, self.font2, 'update', 100).run()
+        self.pb_pos_update = FixObj(QPushButton, self.font2, 'Update', 80).run()
         self.pb_pos_update.clicked.connect(self.pos_update)
 
-        self.pb_pos_go = FixObj(QPushButton, self.font2, 'Go To', 100).run()
+        self.pb_pos_go = FixObj(QPushButton, self.font2, 'Go To', 80).run()
         self.pb_pos_go.clicked.connect(self.pos_go_to)
 
-        self.pb_pos_select = FixObj(QPushButton, self.font2, 'select for scan --->', 205).run()
+        self.pb_pos_select = FixObj(QPushButton, self.font2, 'select\nfor scan\n--->', 70, 135).run()
         self.pb_pos_select.setStyleSheet('color: rgb(0, 80, 255)')
         self.pb_pos_select.clicked.connect(self.pos_select_for_scan)
 
@@ -1133,18 +1187,33 @@ class App(QWidget):
         hbox3.addWidget(self.pb_pos_go)
         hbox3.setAlignment(QtCore.Qt.AlignLeft)
 
+        hbox4 = QHBoxLayout()
+        hbox4.addWidget(self.pb_pos_save)
+        hbox4.addWidget(self.pb_pos_load_last)
+        hbox4.setAlignment(QtCore.Qt.AlignLeft)
+
         vbox_rec_go = QVBoxLayout()
         vbox_rec_go.addLayout(hbox1)
         vbox_rec_go.addLayout(hbox2)
         vbox_rec_go.addLayout(hbox3)
-        vbox_rec_go.addWidget(self.pb_pos_select)
-        vbox_rec_go.addLayout(hbox_pos1)
-        vbox_rec_go.addLayout(hbox_pos2)
+        vbox_rec_go.addWidget(sep)
+        vbox_rec_go.addLayout(hbox4)
         vbox_rec_go.setAlignment(QtCore.Qt.AlignTop)
+
+        hbox_pos_comb = QHBoxLayout()
+        hbox_pos_comb.addLayout(vbox_rec_go)
+        hbox_pos_comb.addWidget(self.pb_pos_select)
+        hbox_pos_comb.setAlignment(QtCore.Qt.AlignLeft)
+
+        vbox_pos_comb = QVBoxLayout()
+        vbox_pos_comb.addLayout(hbox_pos_comb)
+        vbox_pos_comb.addLayout(hbox_pos1)
+        vbox_pos_comb.addLayout(hbox_pos2)
+        vbox_pos_comb.setAlignment(QtCore.Qt.AlignTop)
 
         hbox = QHBoxLayout()
         hbox.addWidget(self.lst_pos)
-        hbox.addLayout(vbox_rec_go)
+        hbox.addLayout(vbox_pos_comb)
         hbox.setAlignment(QtCore.Qt.AlignLeft)
 
         vbox_lst = QVBoxLayout()
@@ -1261,7 +1330,6 @@ class App(QWidget):
         vbox_scan.addStretch()
 
         return vbox_scan
-
 
     def hbox_scan_cmd(self):
         lb_sep = FixObj(QLabel, self.font2, '', 0, 30).run()
@@ -1953,7 +2021,6 @@ class App(QWidget):
             self.mot_sample_z.fun_move_to_pos()
             self.mot_sample_r.fun_move_to_pos()
 
-
     def pos_record_bkg(self):
         x = float(self.mot_sample_x.label_motor_pos.text())
         y = float(self.mot_sample_y.label_motor_pos.text())
@@ -1972,6 +2039,24 @@ class App(QWidget):
         item[0].setSelected(True)
         self.show_pos_clicked()
         self.add_bkg_pos()
+
+    def pos_save(self):
+        n = len(self.pos)
+        keys = self.pos.keys()
+        with open('/tmp/sample_pos.json', 'w') as f:
+            json.dump(self.pos, f)
+        print('Position has been saved to /tmp/sample_pos.json\n')
+
+    def pos_load_last(self):
+        self.pos = {}
+        self.lst_pos.clear()
+        self.lst_scan_pos.clear()
+        with open('/tmp/sample_pos.json', 'r') as f:
+            self.pos = json.load(f)
+        print('Load sample position from /tmp/sample_pos.json\n')
+        for k in self.pos.keys():
+            self.lst_pos.addItem(k)
+        self.lst_pos.sortItems()
 
     def show_scan_example_sub(self, txm_scan):
         for i in range(20):
@@ -2123,10 +2208,11 @@ class App(QWidget):
             pos = item.text()
             self.sample_pos[pos] = self.pos[pos]
 
-    def check_scan(self):
+    def check_scan(self, use_exist_pos=False):
         self.txm_scan = {}
         flag_multi_pos_scan = 0
-        self.get_scan_pos_from_list()
+        if not use_exist_pos:
+            self.get_scan_pos_from_list()
         num_pos = len(self.sample_pos)
         if num_pos == 0:
             flag_pos_selected = 0
@@ -2476,7 +2562,6 @@ class App(QWidget):
             with open('/tmp/scan_output.txt', 'w') as f:
                 f.write(txt)
 
-
     def load_scan_type_list(self, scan_type=1, fpath_scan_list=''):
         global scan_list
         msg = ''
@@ -2562,8 +2647,7 @@ class App(QWidget):
                 fname_write = 'custom_converted_scan_list.py'
                 prepare_scan_list(fname_read, fname_write) 
                 self.load_scan_type_list(4, fname_write)
-
-        
+      
     def record_scan(self):
         # need to 'check scan' first
         n = self.lst_record_scan.count()
@@ -2607,7 +2691,7 @@ class App(QWidget):
         self.tx_pos.setText(pos[:-1])
         self.scan_name = 'txm_' + scan_name  # this is global
         self.sample_pos = self.txm_scan['pos'].copy()
-        self.check_scan()
+        self.check_scan(use_exist_pos=True)
 
     def remove_recorded_scan(self):
         item = self.lst_record_scan.selectedItems()
@@ -2735,7 +2819,8 @@ class App(QWidget):
             flag_multi_pos_scan = 1
         else:
             flag_multi_pos_scan = 0
-        cmd = 'RE.md["scan_id"] = db[-1].start["scan_id"]\n'
+        #cmd = 'RE.md["scan_id"] = db[-1].start["scan_id"]\n'
+        cmd = ''
         scan = self.txm_record_scan[scan_name]
         for k in scan.keys():
             if k == 'name' or k == 'pos' or k == 'XEng':
@@ -3591,12 +3676,35 @@ class App(QWidget):
         for mot in self.motor_display:
             if hasattr(mot, 'button_reset_reading'):
                 if self.chk_reset_reading.isChecked():
+                    if 'zps' in mot.motor_name and (not 'zps.pi_x' in mot.motor_name) : # zps.sx, y, z, pi_r
+                        mot.button_step_minus.setVisible(False)
+                        mot.editor_step_size.setVisible(False)
+                        mot.button_step_plus.setVisible(False)
+                        mot.step_unit.setVisible(False)
+                        mot.button_reset_reading.setVisible(True)
+                        mot.editor_reset_reading.setVisible(True)
+                        
                     mot.button_reset_reading.setEnabled(True)
                     mot.editor_reset_reading.setEnabled(True)
+                    # specially for XEng
+                    self.mot_sample_e.label_eng_calib.setVisible(False)
+                    self.mot_sample_e.cbox_dcm_only.setVisible(True)
+
                 else:
                     mot.button_reset_reading.setEnabled(False)
                     mot.editor_reset_reading.setEnabled(False)
-    
+                    if 'zps' in mot.motor_name and (not 'zps.pi_x' in mot.motor_name): # zps.sx, y, z, pi_r
+                        mot.button_reset_reading.setVisible(False)
+                        mot.editor_reset_reading.setVisible(False)
+                        mot.button_step_minus.setVisible(True)
+                        mot.editor_step_size.setVisible(True)
+                        mot.button_step_plus.setVisible(True)
+                        mot.step_unit.setVisible(True)
+                    # specially for XEng                   
+                    self.mot_sample_e.cbox_dcm_only.setVisible(False)
+                    self.mot_sample_e.cbox_dcm_only.setChecked(False)
+                    self.mot_sample_e.label_eng_calib.setVisible(True)
+                
     def record_eng_calib(self):
         global CALIBER
         try:
@@ -3768,6 +3876,28 @@ class App(QWidget):
             QApplication.processEvents()         
         except Exception as err:
             print(err)
+
+def RS(motor_name, val=0):
+    global txm
+    if motor_name == 'x' or motor_name == 1:
+        motor = zps.sx
+    elif motor_name == 'y' or motor_name == 2:
+        motor = zps.sy
+    elif motor_name == 'z' or motor_name == 3:
+        motor = zps.sz
+    elif motor_name == 'r' or motor_name == 4:
+        motor = zps.pi_r
+    else:
+        print('un-recongnized motor name in: "x", "y", "z", "r"')
+        return 0
+    RE(mv(motor.motor_calib, 1))
+    RE(mv(motor, val))
+    RE(mv(motor.motor_calib, 0))
+    txm.mot_sample_x.init_pos_display_sample()
+    txm.mot_sample_y.init_pos_display_sample()
+    txm.mot_sample_z.init_pos_display_sample()
+    txm.mot_sample_r.init_pos_display_sample()
+
 
 def merge_dict(dict1, dict2):
     res = {**dict1, **dict2}
@@ -3955,6 +4085,7 @@ def extract_function(fname, key='def'):
     return dict
 
 def run_main():
+    global txm
     app = QApplication(sys.argv)
     txm = App()
     txm.show()
