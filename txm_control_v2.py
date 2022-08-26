@@ -208,12 +208,12 @@ class Shutter():
 
 
     def pb_open_shutter(self):
-        self.obj.open_shutter = FixObj(QPushButton, self.font2, 'Open shutter', 120, 40).run()
+        self.obj.open_shutter = FixObj(QPushButton, self.font1, 'Open shutter', 120, 40).run()
         self.obj.open_shutter.setStyleSheet('color: rgb(50, 200, 50);')
         return self.obj.open_shutter
 
     def pb_close_shutter(self):
-        self.obj.close_shutter = FixObj(QPushButton, self.font2, 'Close shutter', 120, 40).run()
+        self.obj.close_shutter = FixObj(QPushButton, self.font1, 'Close shutter', 120, 40).run()
         self.obj.close_shutter.setStyleSheet('color: rgb(200, 50, 50);')
         return self.obj.close_shutter
 
@@ -545,12 +545,6 @@ class PZT_th2_chi2(Motor_layout):
         super().__init__(obj, motor_name, motor_label, unit)
         #self.init_connect_function_pzt()
         self.init_pos_display_motor()
-    '''
-    def init_connect_function(self): 
-        self.editor_setpos.returnPressed.connect(self.fun_move_to_pos)
-        self.button_step_plus.clicked.connect(lambda: self.fun_move_plus_minus('plus'))
-        self.button_step_minus.clicked.connect(lambda: self.fun_move_plus_minus('minus'))   
-    '''
 
     def init_pos_display_motor(self): # overload function in super()
         current_pos = self.mot.pos.get()
@@ -1106,7 +1100,7 @@ class App(QWidget):
         return vbox
        
     def vbox_pos_list(self):
-        sep = FixObj(QLabel, None, '', 170, 2).run()
+        sep = FixObj(QLabel, None, '', 170, 5).run()
         sep.setStyleSheet('background-color: rgb(0, 80, 255);')
 
         lb_pos = FixObj(QLabel, self.font1,'Position saved', 160).run() 
@@ -3002,23 +2996,28 @@ class App(QWidget):
         lb_zp_diameter = FixObj(QLabel, self.font2, 'ZP diameter:', 120).run()
         lb_zp_diameter_unit = FixObj(QLabel, self.font2, 'um', 40).run()
         self.tx_zp_diamter = FixObj(QLineEdit, self.font2, '244', 60 ).run()
+        self.tx_zp_diamter.returnPressed.connect(self.cal_zone_plate_param)
 
         lb_zp_width = FixObj(QLabel, self.font2, 'Outer width:', 120).run()
         lb_zp_width_unit = FixObj(QLabel, self.font2, 'nm', 40).run()
         self.tx_zp_width = FixObj(QLineEdit, self.font2, '30', 60).run()
+        self.tx_zp_width.returnPressed.connect(self.cal_zone_plate_param)
 
         lb_txm_mag = FixObj(QLabel, self.font2, 'ZP Mag:', 120).run()
         lb_txm_mag_unit = FixObj(QLabel, self.font2, 'x', 40).run()
         self.tx_txm_mag = FixObj(QLineEdit, self.font2, '32.5', 60).run()
+        self.tx_txm_mag.returnPressed.connect(self.cal_zone_plate_param)
 
         lb_vlm_mag = FixObj(QLabel, self.font2, 'Vis Lens Mag:', 120).run()
         lb_vlm_mag_unit = FixObj(QLabel, self.font2, 'x', 40).run()
         self.tx_vlm_mag = FixObj(QLineEdit, self.font2, '10', 60).run()
+        self.tx_vlm_mag.returnPressed.connect(self.cal_zone_plate_param)
 
         lb_xray_eng = FixObj(QLabel, self.font2, 'X-ray energy:', 120).run()
         lb_xray_eng_unit = FixObj(QLabel, self.font2, 'keV', 40).run()
         self.tx_xray_eng = FixObj(QLineEdit, self.font2, '8.0', 60).run()
-        
+        self.tx_xray_eng.returnPressed.connect(self.cal_zone_plate_param)
+
         self.pb_zp_cal = FixObj(QPushButton, self.font2, 'Calculate', 230).run()
         self.pb_zp_cal.clicked.connect(self.cal_zone_plate_param)
         
