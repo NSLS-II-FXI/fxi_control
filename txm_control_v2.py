@@ -3738,7 +3738,7 @@ class App(QWidget):
             self.tx_zp_na.setText(f'{NA:4.3f}')
             self.tx_zp_dof.setText(f'{DOF:4.3f}')
             self.tx_zp_dis.setText(f'{zp_pos:4.4f}')
-            self.tx_zp_ccd.setText(f'{ccd_pos:4.2f}')
+            self.tx_zp_ccd.setText(f'{ccd_pos:4.4f}')
         except Exception as err:
             print(err)
             print('something wrong, check inputs')

@@ -1,5 +1,17 @@
 def fxi_load_scan_list_other():
     scan_list = {}
+    txm_beam_profile_scan = {
+        'dir': None, 
+        'start': None, 
+        'end': None, 
+        'steps': None, 
+        'delay_time': 0.1, 
+        'mv_back': False, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
     txm_cond_scan = {
         'detectors': 'detA1',
         'introduction': ''' Description:
@@ -90,6 +102,7 @@ def fxi_load_scan_list_other():
         'ssa_start': None, 
         'ssa_end': None, 
         'ssa_steps': None, 
+        'mv_back': False, 
         'introduction': ''' Description:
  '''
     }
@@ -172,6 +185,7 @@ def fxi_load_scan_list_other():
     }
 
 
+    scan_list["txm_beam_profile_scan"] = txm_beam_profile_scan
     scan_list["txm_cond_scan"] = txm_cond_scan
     scan_list["txm_knife_edge_scan_for_condensor"] = txm_knife_edge_scan_for_condensor
     scan_list["txm_load_cell_scan"] = txm_load_cell_scan

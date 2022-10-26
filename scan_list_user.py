@@ -51,7 +51,7 @@ def fxi_load_scan_list_user():
     }
 
 
-    txm_xanes_3D_xh = {
+    txm__xanes_3D_xh = {
         'eng_list': [], 
         'exposure_time': 0.05, 
         'start_angle': None, 
@@ -234,6 +234,7 @@ def fxi_load_scan_list_user():
         'flts': [], 
         'relative_move_flag': True, 
         'simu': False, 
+        'enable_z': True, 
         'introduction': ''' Description:
  '''
     }
@@ -245,7 +246,7 @@ def fxi_load_scan_list_user():
         'flts': {'Ni_filters': [1, 2, 3]}, 
         'exposure_time': {'Ni_exp': 0.05}, 
         'rel_rot_ang': 185, 
-        'rs': 1, 
+        'rs': 6, 
         'in_pos_list': [[None, None, None, None]], 
         'out_pos': [None, None, None, None], 
         'chunk_size': 5, 
@@ -266,7 +267,7 @@ def fxi_load_scan_list_user():
         'period_time': {'Ni_period': 0.05}, 
         'rel_rot_ang': 185, 
         'start_angle': None, 
-        'rs': 1, 
+        'rs': 6, 
         'in_pos_list': [[None, None, None, None]], 
         'out_pos': [None, None, None, None], 
         'relative_move_flag': 0, 
@@ -292,7 +293,7 @@ def fxi_load_scan_list_user():
         'exposure_time_2D': {'Ni_2D_exp': 0.05}, 
         'exposure_time_3D': {'Ni_3D_exp': 0.05}, 
         'rel_rot_ang': 185, 
-        'rs': 1, 
+        'rs': 6, 
         'sleep_time': 0, 
         'repeat_num': 1, 
         'chunk_size': 5, 
@@ -313,7 +314,7 @@ def fxi_load_scan_list_user():
         'exposure_time_2D': [0.05], 
         'exposure_time_3D': [0.05], 
         'rel_rot_ang': 0, 
-        'rs': 1, 
+        'rs': 6, 
         'eng_3D': [10, 60], 
         'relative_move_flag': 0, 
         'simu': False, 

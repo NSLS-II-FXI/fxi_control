@@ -273,6 +273,32 @@ def fxi_load_scan_list_common():
     }
 
 
+    txm_tomo_mosaic_scan = {
+        'x_ini': None, 
+        'y_ini': None, 
+        'z_ini': None, 
+        'x_num_steps': None, 
+        'y_num_steps': None, 
+        'z_num_steps': None, 
+        'x_step_size': None, 
+        'y_step_size': None, 
+        'z_step_size': None, 
+        'exposure_time': None, 
+        'period': None, 
+        'rs': 4, 
+        'out_x': None, 
+        'out_y': None, 
+        'out_z': None, 
+        'out_r': None, 
+        'start_angle': None, 
+        'relative_rot_angle': 180, 
+        'relative_move_flag': True, 
+        'simu': False, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
     txm_tomo_scan = {
         'start': None, 
         'stop': None, 
@@ -368,6 +394,7 @@ def fxi_load_scan_list_common():
     scan_list["txm_raster_2D_scan_test"] = txm_raster_2D_scan_test
     scan_list["txm_raster_2D_xanes2"] = txm_raster_2D_xanes2
     scan_list["txm_raster_2D_xanes3"] = txm_raster_2D_xanes3
+    scan_list["txm_tomo_mosaic_scan"] = txm_tomo_mosaic_scan
     scan_list["txm_tomo_scan"] = txm_tomo_scan
     scan_list["txm_xanes_3D"] = txm_xanes_3D
     scan_list["txm_xanes_scan"] = txm_xanes_scan
