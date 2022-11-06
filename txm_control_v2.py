@@ -802,6 +802,8 @@ class XEng_motor_layout(Motor_layout):
                 self.editor_setpos.setEnabled(True)
                 val_rb = self.mot.position
                 self.label_motor_pos.setText(f'{val_rb:4.4f}')
+                current_eng = self.obj.mot_sample_e.label_motor_pos.text()
+                self.obj.scan_tx['XEng'].setText(current_eng)
 
 class Filter_layout():
     def __init__(self, obj, filter_name, filter_label):
@@ -1152,6 +1154,7 @@ class App(QWidget):
         self.pb_pos_load_last.clicked.connect(self.pos_load_last)
 
         self.pb_pos_rm = FixObj(QPushButton, self.font2, 'Remove', 80).run()
+        self.pb_pos_rm.clicked.connect(self.pos_remove)
 
         self.pb_pos_rm_all = FixObj(QPushButton, self.font2, 'Rmv. all', 80).run()
         self.pb_pos_rm_all.clicked.connect(self.pos_remove_all)
@@ -3153,10 +3156,10 @@ class App(QWidget):
 
         lb_sep = QLabel()
         lb_sep.setFixedHeight(10)
-        self.filt1 = Filter_layout(self, 'filter1', 'Filter 1 (1-Al)')
-        self.filt2 = Filter_layout(self, 'filter2', 'Filter 2 (2-Al)')
-        self.filt3 = Filter_layout(self, 'filter3', 'Filter 3 (3-Al)')
-        self.filt4 = Filter_layout(self, 'filter4', 'Filter 4 (1-Cu)')
+        self.filt1 = Filter_layout(self, 'filter1', 'Filter 1 (1-Cu)')
+        self.filt2 = Filter_layout(self, 'filter2', 'Filter 2 (1-Al)')
+        self.filt3 = Filter_layout(self, 'filter3', 'Filter 3 (2-Al)')
+        self.filt4 = Filter_layout(self, 'filter4', 'Filter 4 (3-Al)')
         
         self.motor_display.append(self.filt1)
         self.motor_display.append(self.filt2)

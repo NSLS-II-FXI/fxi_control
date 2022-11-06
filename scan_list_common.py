@@ -212,7 +212,7 @@ def fxi_load_scan_list_common():
     }
 
 
-    txm_raster_2D_scan_test = {
+    txm_raster_2D_scan_filter_bkg = {
         'x_range': [-1, 1], 
         'y_range': [-1, 1], 
         'exposure_time': 0.1, 
@@ -391,7 +391,7 @@ def fxi_load_scan_list_common():
     scan_list["txm_multipos_2D_xanes_scan3"] = txm_multipos_2D_xanes_scan3
     scan_list["txm_raster_2D_scan"] = txm_raster_2D_scan
     scan_list["txm_raster_2D_scan2"] = txm_raster_2D_scan2
-    scan_list["txm_raster_2D_scan_test"] = txm_raster_2D_scan_test
+    scan_list["txm_raster_2D_scan_filter_bkg"] = txm_raster_2D_scan_filter_bkg
     scan_list["txm_raster_2D_xanes2"] = txm_raster_2D_xanes2
     scan_list["txm_raster_2D_xanes3"] = txm_raster_2D_xanes3
     scan_list["txm_tomo_mosaic_scan"] = txm_tomo_mosaic_scan
