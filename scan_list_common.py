@@ -83,6 +83,30 @@ def fxi_load_scan_list_common():
     }
 
 
+    txm_fly_scan_test = {
+        'exposure_time': 0.05, 
+        'start_angle': None, 
+        'relative_rot_angle': 180, 
+        'period': 0.05, 
+        'out_x': None, 
+        'out_y': None, 
+        'out_z': None, 
+        'out_r': None, 
+        'rs': 3, 
+        'relative_move_flag': 1, 
+        'rot_first_flag': 1, 
+        'filters': [], 
+        'rot_back_velo': 30, 
+        'move_to_ini_pos': True, 
+        'simu': False, 
+        'take_bkg_img': True, 
+        'take_dark_img': True, 
+        'close_shutter_finish': True, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
     txm_multi_pos_xanes_3D = {
         'eng_list': [], 
         'x_list': None, 
@@ -385,6 +409,7 @@ def fxi_load_scan_list_common():
     scan_list["txm_eng_scan_basic"] = txm_eng_scan_basic
     scan_list["txm_fly_scan"] = txm_fly_scan
     scan_list["txm_fly_scan_repeat"] = txm_fly_scan_repeat
+    scan_list["txm_fly_scan_test"] = txm_fly_scan_test
     scan_list["txm_multi_pos_xanes_3D"] = txm_multi_pos_xanes_3D
     scan_list["txm_multipos_2D_xanes_scan"] = txm_multipos_2D_xanes_scan
     scan_list["txm_multipos_2D_xanes_scan2"] = txm_multipos_2D_xanes_scan2

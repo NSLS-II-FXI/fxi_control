@@ -133,6 +133,22 @@ def fxi_load_scan_list_other():
     }
 
 
+    txm_test_scan2 = {
+        'exposure_time': 0.1, 
+        'out_x': -100, 
+        'out_y': -100, 
+        'out_z': 0, 
+        'out_r': 0, 
+        'num_img': 10, 
+        'take_dark_img': True,
+        'relative_move_flag': 1,
+        'rot_first_flag': 1,
+        'simu': False, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
     txm_tm_pitch_scan = {
         'tm_pitch_list': None, 
         'ssa_h_start': None, 
@@ -196,6 +212,7 @@ def fxi_load_scan_list_other():
     scan_list["txm_ssa_scan_tm_bender"] = txm_ssa_scan_tm_bender
     scan_list["txm_ssa_scan_tm_yaw"] = txm_ssa_scan_tm_yaw
     scan_list["txm_test_scan"] = txm_test_scan
+    scan_list["txm_test_scan2"] = txm_test_scan2
     scan_list["txm_tm_pitch_scan"] = txm_tm_pitch_scan
     scan_list["txm_z_scan"] = txm_z_scan
     scan_list["txm_z_scan2"] = txm_z_scan2
