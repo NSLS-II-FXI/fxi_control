@@ -3718,8 +3718,8 @@ class App(QWidget):
 
     def cal_zone_plate_param(self):
         h = 6.6261e-34
-        c = 3e8
-        ec = 1.602e-19
+        c = 299792458 #3e8
+        ec = 1.6021766E-19 #1.602e-19
         try:
             eng = float(self.tx_xray_eng.text())
             zp_width = float(self.tx_zp_width.text())

@@ -135,14 +135,15 @@ def fxi_load_scan_list_other():
 
     txm_test_scan2 = {
         'exposure_time': 0.1, 
+        'period_time': 0.1, 
         'out_x': -100, 
         'out_y': -100, 
         'out_z': 0, 
         'out_r': 0, 
         'num_img': 10, 
-        'take_dark_img': True,
-        'relative_move_flag': 1,
-        'rot_first_flag': 1,
+        'take_dark_img': True, 
+        'relative_move_flag': 1, 
+        'rot_first_flag': 1, 
         'simu': False, 
         'introduction': ''' Description:
  '''
