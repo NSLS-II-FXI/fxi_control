@@ -2567,7 +2567,7 @@ class App(QWidget):
                 fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_common.py'
                 msg = f'load common scan in: 41-scans.py'
                 print(msg)
-                #get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
+                get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
                 tmp_scan_list = fxi_load_scan_list_common()
                 
             if scan_type == 2: # other scans, e.g., for beamline alignment
@@ -2586,7 +2586,7 @@ class App(QWidget):
             if scan_type == 3: # customized scans, e.g., temporary created 
                 fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_user.py'
                 msg = f'load user scan in: 98-user_scan.py'
-                #get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
+                get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
                 tmp_scan_list = fxi_load_scan_list_user()
             
             if scan_type == 4:
@@ -2616,7 +2616,9 @@ class App(QWidget):
         if scan_type == 1: # update common scan
             fname_read = self.fpath_bluesky_startup + '/41-scans.py'
             fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_common.py'
-            prepare_scan_list(fname_read, fname_write)  
+            prepare_scan_list(fname_read, fname_write) 
+            get_ipython().run_line_magic("run", f"-i {fname_read}")
+
             self.load_scan_type_list(1)
         if scan_type == 2: # update other+pzt scan
             #fname_read = self.fpath_bluesky_startup + '/43-scans_pzt.py'
@@ -2626,11 +2628,13 @@ class App(QWidget):
             fname_read = self.fpath_bluesky_startup + '/44-scans_other.py'
             fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_other.py'
             prepare_scan_list(fname_read, fname_write)  
+            get_ipython().run_line_magic("run", f"-i {fname_read}")
             self.load_scan_type_list(2)
         if scan_type == 3: # update user scan
             fname_read = self.fpath_bluesky_startup + '/98-user_scan.py'
             fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_user.py'
             prepare_scan_list(fname_read, fname_write)  
+            get_ipython().run_line_magic("run", f"-i {fname_read}")
             self.load_scan_type_list(3)
 
         if scan_type == 4: # open custom python files
@@ -2643,6 +2647,7 @@ class App(QWidget):
                 get_ipython().run_line_magic("run", f"-i {fname_read}")
                 fname_write = 'custom_converted_scan_list.py'
                 prepare_scan_list(fname_read, fname_write) 
+                get_ipython().run_line_magic("run", f"-i {fname_read}")
                 self.load_scan_type_list(4, fname_write)
       
     def record_scan(self):
@@ -2957,11 +2962,11 @@ class App(QWidget):
         lb_sep3.setFixedHeight(10)
         lb_sep3.setFixedWidth(100)
         
-        self.mot_txmX = Motor_layout(self, 'zps.pi_x', 'TXM X', 'mm')     
-        self.motor_display.append(self.mot_txmX)
+        #self.mot_txmX = Motor_layout(self, 'zps.pi_x', 'TXM X', 'mm')       
+        #self.motor_display.append(self.mot_txmX)
         
         vbox = QVBoxLayout()
-        vbox.addLayout(self.mot_txmX.layout())
+        #vbox.addLayout(self.mot_txmX.layout())
         vbox.addWidget(lb_sep1)
 
         vbox.addLayout(self.vbox_motor_detU())
@@ -3935,6 +3940,7 @@ def prepare_scan_list(fname_read, fname_write='scan_list_test.py'):
     file_lines = convert_initial_digit_to_string(file_lines)
     with open(fname_write, 'w') as f:
         f.write(f'\n'.join(file_lines))
+    
 
 def convert_fun_dict(fun_name):
     #single_fun = inspect.getfullargspec(eval(fun_name))

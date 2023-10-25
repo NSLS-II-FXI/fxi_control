@@ -1,5 +1,12 @@
 def fxi_load_scan_list_common():
     scan_list = {}
+    txm_aaa_scan = {
+        'x_init': None, 
+        'introduction': ''' Description:
+ '''
+    }
+
+
     txm_delay_scan = {
         'detectors': [], 
         'motor': None, 
@@ -162,7 +169,6 @@ def fxi_load_scan_list_common():
         'out_y': None, 
         'out_z': None, 
         'out_r': None, 
-        'repeat_num': 1, 
         'exposure_time': 0.2, 
         'sleep_time': 1, 
         'chunk_size': 5, 
@@ -307,7 +313,7 @@ def fxi_load_scan_list_common():
         'x_step_size': None, 
         'y_step_size': None, 
         'z_step_size': None, 
-        'exposure_time': None, 
+        'exposure_time': 0.05, 
         'period': None, 
         'rs': 4, 
         'out_x': None, 
@@ -404,6 +410,7 @@ def fxi_load_scan_list_common():
     }
 
 
+    scan_list["txm_aaa_scan"] = txm_aaa_scan
     scan_list["txm_delay_scan"] = txm_delay_scan
     scan_list["txm_eng_scan"] = txm_eng_scan
     scan_list["txm_eng_scan_basic"] = txm_eng_scan_basic
