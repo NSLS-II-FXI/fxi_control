@@ -22,6 +22,7 @@ from qtconsole.manager import QtKernelManager
 import threading
 import bluesky.plan_stubs as bps
 import ast
+import sys
 import numpy as np
 from epics import caget, caput
 from inspect import getmembers, isfunction
@@ -71,7 +72,7 @@ class OutputWrapper(QObject):
         return getattr(self._stream, name)
 
     def __del__(self):
-        import sys
+        
         try:
             if self._stdout:
                 sys.stdout = self._stream
@@ -300,16 +301,34 @@ class TXM_ZP_mag():
         self.init_motor_component()
 
     def init_motor_component(self):
-        self.lb_sep1 = FixObj(QLabel, self.font2, '', 0, 10).run()
-        self.lb_sep2 = FixObj(QLabel, self.font2, '', 0, 10).run()
-        self.lb_current_mag = FixObj(QLabel, self.font2, 'TXM Mag:', 80).run()
-        self.obj.lb_current_mag = FixObj(QLabel, self.font2, '', 80).run()
-        self.lb_zp_mag = FixObj(QLabel, self.font2, 'ZP Mag:', 80).run()
-        self.obj.lb_zp_mag = FixObj(QLabel, self.font2, '', 80).run()
-        self.lb_pix_size = FixObj(QLabel, self.font2, 'Pixel:', 80).run()
-        self.obj.lb_pix_size = FixObj(QLabel, self.font2, '', 80).run()
+        self.lb_sep0 = FixObj(QLabel, self.font2, '', 0, 10).run()
+        self.lb_sep1 = FixObj(QLabel, self.font2, '', 0, 2).run()
+        self.lb_sep2 = FixObj(QLabel, self.font2, '', 0, 2).run()
+        self.lb_sep3 = FixObj(QLabel, self.font2, '', 0, 20).run()
+        self.lb_current_mag = FixObj(QLabel, self.font2, 'TXM Mag:', 100).run()
+        self.obj.lb_current_mag = FixObj(QLabel, self.font2, '', 100).run()
+        self.lb_zp_mag = FixObj(QLabel, self.font2, 'ZP Mag:', 100).run()
+        self.obj.lb_zp_mag = FixObj(QLabel, self.font2, '', 100).run()
+        self.lb_pix_size = FixObj(QLabel, self.font2, 'Pixel:', 100).run()
+        self.obj.lb_pix_size = FixObj(QLabel, self.font2, '', 100).run()
+        self.lb_set_zp_mag = FixObj(QLabel, self.font2, 'Set ZP Mag:', 100).run()
+        self.lb_set_zp_mag.setStyleSheet('color: rgb(0, 80, 255)')
+        self.lb_set_zp_mag_msg = FixObj(QLabel, self.font2, "Don't use during calib.", 160).run()
+        self.lb_set_zp_mag_msg.setStyleSheet('color: rgb(0, 80, 255)')
+        print('\n\n\n##################')
+        print(GLOBAL_MAG)
+        print(GLOBAL_VLM_MAG)
+        self.obj.tx_set_zp_mag = FixObj(QLineEdit, self.font2, f'{GLOBAL_MAG/GLOBAL_VLM_MAG}', 60).run()
+        self.obj.tx_set_zp_mag.setEnabled(False)
+
+
 
     def layout(self):
+        hbox_set_zp_mag = QHBoxLayout()
+        hbox_set_zp_mag.addWidget(self.lb_set_zp_mag)
+        hbox_set_zp_mag.addWidget(self.obj.tx_set_zp_mag)
+        hbox_set_zp_mag.setAlignment(QtCore.Qt.AlignTop)
+
         hbox_zp_mag = QHBoxLayout()
         hbox_zp_mag.addWidget(self.lb_zp_mag)
         hbox_zp_mag.addWidget(self.obj.lb_zp_mag)
@@ -326,6 +345,10 @@ class TXM_ZP_mag():
         hbox_txm_pix.setAlignment(QtCore.Qt.AlignTop)
 
         vbox_pix_mag = QVBoxLayout()
+        vbox_pix_mag.addWidget(self.lb_sep0)
+        vbox_pix_mag.addLayout(hbox_set_zp_mag)
+        vbox_pix_mag.addWidget(self.lb_set_zp_mag_msg)
+        vbox_pix_mag.addWidget(self.lb_sep3)
         vbox_pix_mag.addLayout(hbox_zp_mag)
         vbox_pix_mag.addWidget(self.lb_sep1)
         vbox_pix_mag.addLayout(hbox_txm_mag)
@@ -335,7 +358,7 @@ class TXM_ZP_mag():
         return vbox_pix_mag
 
     def fun_update_status(self, txm_mag):
-        
+        #self.obj.tx_set_zp_mag.setText(f'{txm_mag:3.2f}')        
         self.obj.lb_current_mag.setText(f'{txm_mag*GLOBAL_VLM_MAG:3.2f}')
         self.obj.lb_zp_mag.setText(f'{txm_mag:3.2f}')
         self.obj.lb_pix_size.setText(f'{6500./txm_mag/GLOBAL_VLM_MAG:2.2f} nm')
@@ -794,10 +817,18 @@ class XEng_motor_layout(Motor_layout):
                     print('move dcm only\n')
                     RE(mv(XEng, val))
                 else:
-                    RE(move_zp_ccd(val))
-            except:
+                    set_mag = self.obj.tx_set_zp_mag.text()
+                    try:
+                        mag = float(set_mag)
+                    except Exception as err:                        
+                        mag = None
+                    finally:
+                        RE(move_zp_ccd_TEST(val, mag=mag))
+                        self.obj.tx_set_zp_mag.setText(self.obj.lb_zp_mag.text())
+            except Exception as err:
                 msg = f'fails to move {self.motor_name}'
                 print(msg)
+                print(err)
             finally:
                 self.editor_setpos.setEnabled(True)
                 val_rb = self.mot.position
@@ -941,9 +972,11 @@ class App(QWidget):
         self.sample_pos = {}
         self.scan_name = ''
         self.pos_num = 0
+        self.calib_note = 'Before calibration, click "Go to calib" to any existing calib. position first' 
         self.txm_eng_list = {}
         self.txm_scan = {}
         self.txm_record_scan = {}
+        self.selected_calib_energy = {}
         self.motor_display = []
         self.msg_external_file = ''
         self.temporary_py_file = ''
@@ -1982,6 +2015,7 @@ class App(QWidget):
 
     def pos_remove_all(self):
         self.pos = {}
+        self.pos_num = 0
         self.lst_pos.clear()
         self.lst_scan_pos.clear()
 
@@ -2046,6 +2080,7 @@ class App(QWidget):
 
     def pos_load_last(self):
         self.pos = {}
+        self.pos_num = 0
         self.lst_pos.clear()
         self.lst_scan_pos.clear()
         with open('/tmp/sample_pos.json', 'r') as f:
@@ -2053,6 +2088,10 @@ class App(QWidget):
         print('Load sample position from /tmp/sample_pos.json\n')
         for k in self.pos.keys():
             self.lst_pos.addItem(k)
+            if k != 'Bkg':
+                self.pos_num += 1
+            else:
+                self.add_bkg_pos()
         self.lst_pos.sortItems()
 
     def show_scan_example_sub(self, txm_scan):
@@ -2076,6 +2115,8 @@ class App(QWidget):
             self.scan_lb[f'lb_{i}'].setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             self.scan_tx[f'tx_{i}'].setText(str(txm_scan[key]))
             self.scan_tx[f'tx_{i}'].setVisible(True)
+            if 'mag' in key:
+                self.scan_tx[f'tx_{i}'].setText(self.tx_set_zp_mag.text())
             i += 1
         if flag_eng_list > 0:
             self.pb_select_eng_list.setEnabled(True)
@@ -2310,7 +2351,13 @@ class App(QWidget):
         cmd_all += cmd_check_sid + '\n'
 
         self.txm_scan['XEng'] = eng
-        cmd_move_eng = f'RE(move_zp_ccd({eng}))\n'
+        try:
+            mag = float(self.tx_set_zp_mag.text())    
+        except:
+            mag = None
+ 
+        cmd_move_eng = f'RE(move_zp_ccd_TEST({eng}, mag={mag}))\n'
+
         cmd_all += cmd_move_eng + '\n'
 
         if len(cmd_eng_list):
@@ -2661,6 +2708,8 @@ class App(QWidget):
         self.txm_record_scan[record_scan_name] = self.txm_scan.copy()
         self.lst_record_scan.addItem(record_scan_name)
         self.pb_record.setDisabled(True)
+        
+
 
     def show_recorded_scan(self):
         item = self.lst_record_scan.selectedItems()
@@ -3186,7 +3235,7 @@ class App(QWidget):
 
     def layout_record_eng_calib(self):
         lb_empty = QLabel()
-        lb_empty.setFixedHeight(10)
+        lb_empty.setFixedHeight(5)
 
         lb_empty2 = QLabel()
         lb_empty2.setFixedWidth(5)
@@ -3212,6 +3261,10 @@ class App(QWidget):
         self.pb_rm_all_eng_calib = FixObj(QPushButton, self.font2, 'remove all', 100).run()
         self.pb_rm_all_eng_calib.clicked.connect(self.remove_eng_calib_all)
 
+        self.pb_go_to_eng_calib = FixObj(QPushButton, self.font2, 'Go to calib', 100).run()
+        self.pb_go_to_eng_calib.clicked.connect(self.go_to_eng_calib)
+        self.pb_go_to_eng_calib.setStyleSheet('color: rgb(0, 80, 255);')
+
         lb_rec_eng_id = FixObj(QLabel, self.font2, 'Pos ID:', 60).run()
 
         self.tx_rec_eng_id = FixObj(QLineEdit, self.font2, '1', 30).run()
@@ -3227,12 +3280,13 @@ class App(QWidget):
         vbox_pb.addWidget(lb_empty)
         vbox_pb.addWidget(self.pb_rm_eng_calib)
         vbox_pb.addWidget(self.pb_rm_all_eng_calib)
+        vbox_pb.addWidget(self.pb_go_to_eng_calib)
 
         lb_rec_eng_recorded = FixObj(QLabel, self.font2, 'Recorded', 140).run()
 
         self.lst_eng_calib = FixObj(QListWidget, self.font2, '', 140, 160).run()
         self.lst_eng_calib.itemClicked.connect(self.display_calib_eng_detail)
-
+        
         vbox_recorded = QVBoxLayout()
         vbox_recorded.addWidget(lb_rec_eng_recorded)
         vbox_recorded.addWidget(self.lst_eng_calib)
@@ -3285,6 +3339,10 @@ class App(QWidget):
         self.motor_display.append(self.txm_zp_pix)
         vbox_pix_mag = self.txm_zp_pix.layout()
 
+        self.calib_note = 'Before calibration, click "Go to calib" to any existing calib. position first' 
+        self.lb_calib_note = FixObj(QLabel, self.font2, self.calib_note, 500).run()
+        self.lb_calib_note.setStyleSheet('color: rgb(0, 80, 255);')
+
         hbox2 = QHBoxLayout()
         hbox2.addLayout(vbox_pb)
         hbox2.addWidget(lb_empty2)
@@ -3301,6 +3359,7 @@ class App(QWidget):
         vbox.addWidget(lb_empty)
         vbox.addLayout(hbox2)
         #vbox.addWidget(lb_empty2)
+        vbox.addWidget(self.lb_calib_note)
         vbox.addStretch()
         vbox.setAlignment(QtCore.Qt.AlignTop)
 
@@ -3711,13 +3770,35 @@ class App(QWidget):
                     self.mot_sample_e.cbox_dcm_only.setVisible(False)
                     self.mot_sample_e.cbox_dcm_only.setChecked(False)
                     self.mot_sample_e.label_eng_calib.setVisible(True)
-                
+        # lock "Set ZP Mag"
+        if self.chk_reset_reading.isChecked():
+            self.tx_set_zp_mag.setEnabled(True)
+        else:
+            self.tx_set_zp_mag.setEnabled(False)
+
+      
     def record_eng_calib(self):
         global CALIBER
         try:
+            calib_mag = float(self.selected_calib_energy['Mag'])/10.            
+            current_mag = float(self.tx_set_zp_mag.text())
             eng_id = int(self.tx_rec_eng_id.text())
-            record_calib_pos_new(eng_id)
+            if abs(calib_mag - current_mag) > 0.1:
+                '''
+                txt = 'Current magnification is different from calibration position. Will not record'
+                self.lb_calib_note.setText(txt)
+                print(f'current mag = {current_mag}')
+                print(f'calib mag = {calib_mag}')
+                print(f'\n{txt}\n')
+                QApplication.processEvents()  
+                return None
+                '''
+                record_calib_pos_new(eng_id, record_th2_only=True)
+            else:
+                record_calib_pos_new(eng_id)
             self.display_calib_eng_only()
+            self.lb_calib_note.setText(self.calib_note)
+            QApplication.processEvents()  
         except Exception as err:
             print(err)
 
@@ -3754,7 +3835,7 @@ class App(QWidget):
     def remove_eng_calib(self):
         item = self.lst_eng_calib.selectedItems()
         if len(item):
-            eng_id = int(item[0].text().split('_')[0][3:])
+            eng_id = int(item[0].text().split('_')[0])
             self.lst_eng_calib.takeItem(self.lst_eng_calib.row(item[0]))
             print(f'remove energy caliberation point {eng_id}')
             remove_caliber_pos(eng_id)
@@ -3765,7 +3846,7 @@ class App(QWidget):
         for i in range(n):
             item = self.lst_eng_calib.item(i)
             item_name = item.text()
-            eng_id = int(item_name.split('_')[3:])
+            eng_id = int(item_name.split('_')[0])
             remove_caliber_pos(eng_id)
         self.display_calib_eng_only()
 
@@ -3785,7 +3866,7 @@ class App(QWidget):
         for i in range(len(calib_eng_id)):
             eng_id = calib_eng_id[i]
             calib_eng = calib_eng_list[i]
-            txt = f'pos{eng_id}_{calib_eng:2.4f} keV'
+            txt = f'{eng_id:02d}__{calib_eng:2.5f} keV'
             self.lst_eng_calib.addItem(txt)
             
         # update label information
@@ -3809,17 +3890,42 @@ class App(QWidget):
     def display_calib_eng_detail(self):
         item = self.lst_eng_calib.selectedItems()
         pos = item[0].text()
-        eng_id = pos.split('_')[0]
+        eng_id = int(pos.split('_')[0]) # '01'
+        eng_id = str(eng_id) # '1'
+        eng_id_tx = 'pos'+ eng_id # pos1
         txt = ''
         keys = np.sort(list(CALIBER.keys()))[::-1]
+        calib_mag = ''
         for k in keys:
             k0 = k.split('_')
             k1 = '_'.join(i for i in k0[:-1])
             k2 = k0[-1]
-            if k2 == eng_id:
+            if k2 == eng_id_tx:
                 txt += f'{k1:<10} = {CALIBER[k]:5.4f}\n'
+            if k2 == f'mag{eng_id}':
+                calib_mag = CALIBER[k]
         #print(f'pos:\n{txt}')
+        txt = f'{"Mag":<10} = {calib_mag}\n' + txt
         self.tx_eng_calib.setPlainText(txt)
+        self.tx_rec_eng_id.setText(eng_id)
+        self.selected_calib_energy = {}
+        self.selected_calib_energy['XEng'] = CALIBER[f'XEng_{eng_id_tx}']
+        self.selected_calib_energy['Mag'] = calib_mag
+        self.selected_calib_energy['id'] = eng_id_tx
+        
+
+    def go_to_eng_calib(self):
+        sel_eng = self.selected_calib_energy['XEng']
+        sel_mag = self.selected_calib_energy['Mag'] 
+        sel_id = self.selected_calib_energy['id']
+        print(f'Move to calibration {sel_id}:\nXEng = {sel_eng}\nmagnification = {sel_mag}\n\n')
+        
+        RE(move_zp_ccd_TEST(sel_eng, sel_mag))
+        self.tx_set_zp_mag.setText(self.lb_zp_mag.text())
+        self.lb_calib_note.setText(self.calib_note)
+        QApplication.processEvents()    
+
+
 
     def show_op_position(self, n):
         motor = motor_list(n)
@@ -3914,8 +4020,9 @@ def prepare_scan_list(fname_read, fname_write='scan_list_test.py'):
     #fname_read = '/nsls2/data/fxi-new/shared/config/bluesky/profile_collection/startup/41-scans.py'
     source = open(fname_read).read()
     fun = [f.name for f in ast.parse(source).body if isinstance(f, ast.FunctionDef)]
-    fun_scan = [f for f in np.sort(fun) if 'scan' in f or 'xanes' in f] # funciton name with "scan"
-    
+    fun_scan = [f for f in np.sort(fun) if (not f[0] == '_') and ('scan' in f or 'xanes' in f)] # funciton name with "scan"
+    get_ipython().run_line_magic("run", fname_read)
+
     space4 = ' ' * 4
     file_lines = []
     fname_write_short = fname_write.split('/')[-1]
