@@ -25,7 +25,7 @@ if [[ "${BS_ENV}" == *"2020-2"* ]]; then
 fi
 
 
-ipython_cmd="ipython --profile=$BS_PROFILE --IPCompleter.use_jedi=False /nsls2/data/fxi-new/shared/software/fxi_control/txm_control_v2.py"
+ipython_cmd="ipython --profile=$BS_PROFILE --IPCompleter.use_jedi=False /nsls2/data/fxi-new/shared/software/fxi_control/txm_control.py"
 #ipython_cmd="ipython --profile=$BS_PROFILE --IPCompleter.use_jedi=False /home/xf18id/Downloads/test_qt_ipython.py"
 
 $conda_cmd || exit 1
