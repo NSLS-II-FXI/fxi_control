@@ -1,130 +1,5 @@
 def fxi_load_scan_list_user():
     scan_list = {}
-    txm__multi_pos_xanes_2D_xh = {
-        'eng_list': [], 
-        'x_list': None, 
-        'y_list': None, 
-        'z_list': None, 
-        'r_list': None, 
-        'out_x': None, 
-        'out_y': None, 
-        'out_z': None, 
-        'out_r': None, 
-        'repeat_num': 1, 
-        'exposure_time': 0.2, 
-        'sleep_time': 1, 
-        'chunk_size': 5, 
-        'simu': False, 
-        'relative_move_flag': True, 
-        'flts': [], 
-        'enable_z': True, 
-        'introduction': ''' Description:
- '''
-    }
-
-
-    txm__multi_pos_xanes_3D_xh = {
-        'eng_list': [], 
-        'x_list': None, 
-        'y_list': None, 
-        'z_list': None, 
-        'r_list': None, 
-        'start_angle': None, 
-        'exposure_time': 0.05, 
-        'relative_rot_angle': 185, 
-        'period': 0.05, 
-        'out_x': 0, 
-        'out_y': 0, 
-        'out_z': 0, 
-        'out_r': 0, 
-        'rs': 2, 
-        'simu': False, 
-        'relative_move_flag': 1, 
-        'rot_first_flag': 1, 
-        'sleep_time': 0, 
-        'flts': [], 
-        'repeat': 1, 
-        'ref_flat_scan': False, 
-        'enable_z': True, 
-        'introduction': ''' Description:
- '''
-    }
-
-
-    txm__multi_pos_xanes_3D_zebra_xh = {
-        'eng_list': [], 
-        'x_list': None, 
-        'y_list': None, 
-        'z_list': None, 
-        'r_list': None, 
-        'exp_t': 0.05, 
-        'acq_p': 0.05, 
-        'ang_s': 0, 
-        'ang_e': 180, 
-        'vel': 2, 
-        'acc_t': 1, 
-        'out_x': 0, 
-        'out_y': 0, 
-        'out_z': 0, 
-        'out_r': 0, 
-        'simu': False, 
-        'rel_out_flag': 1, 
-        'sleep_time': 0, 
-        'bin_fac': 1, 
-        'flts': [], 
-        'repeat': 1, 
-        'ref_flat_scan': False, 
-        'cam': 'Andor',
-        'flyer': 'tomo_flyer',
-        'introduction': ''' Description:
- '''
-    }
-
-
-    txm__xanes_3D_xh = {
-        'eng_list': [], 
-        'exposure_time': 0.05, 
-        'start_angle': None, 
-        'relative_rot_angle': 180, 
-        'period': 0.06, 
-        'out_x': None, 
-        'out_y': None, 
-        'out_z': None, 
-        'out_r': None, 
-        'rs': 4, 
-        'simu': False, 
-        'relative_move_flag': 1, 
-        'rot_first_flag': 1, 
-        'flts': [], 
-        'enable_z': True, 
-        'introduction': ''' Description:
- '''
-    }
-
-
-    txm__xanes_3D_zebra_xh = {
-        'eng_list': [], 
-        'exp_t': 0.05, 
-        'acq_p': 0.06, 
-        'ang_s': 0, 
-        'ang_e': 180, 
-        'vel': 4, 
-        'acc_t': 1, 
-        'out_x': None, 
-        'out_y': None, 
-        'out_z': None, 
-        'out_r': None, 
-        'simu': False, 
-        'rel_out_flag': 1, 
-        'bin_fac': 1, 
-        'flts': [], 
-        'cam': 'Andor',
-        'flyer': 'tomo_flyer',
-        'introduction': ''' Description:
- '''
-    }
-
-
     txm_damon_scan = {
         'eng_list1': [], 
         'eng_list2': [], 
@@ -149,13 +24,10 @@ def fxi_load_scan_list_user():
 
     txm_dummy_scan = {
         'exposure_time': 0.1, 
-        'start_angle': None, 
-        'rel_rot_ang': 180, 
+        'ang_s': 0, 
+        'ang_e': 180, 
         'period': 0.15, 
-        'out_x': None, 
-        'out_y': 2000, 
-        'out_z': None, 
-        'out_r': None, 
+        'out_pos': [None, None, None, None], 
         'rs': 1, 
         'simu': False, 
         'relative_move_flag': 1, 
@@ -163,6 +35,7 @@ def fxi_load_scan_list_user():
         'flts': [], 
         'rot_back_velo': 30, 
         'repeat': 1, 
+        'cam': 'Andor',
         'introduction': ''' Description:
  '''
     }
@@ -226,6 +99,7 @@ def fxi_load_scan_list_user():
         'chunk_size': 10, 
         'exposure_time': 0.1, 
         'simu': False, 
+        'cam': 'Andor',
         'introduction': ''' Description:
  '''
     }
@@ -292,6 +166,33 @@ def fxi_load_scan_list_user():
         'enable_z': True, 
         'repeat': 1, 
         'sleep': 0, 
+        'cam': 'Andor',
+        'introduction': ''' Description:
+ '''
+    }
+
+
+    txm_mosaic_zfly_scan_xh = {
+        'ini_pos': None, 
+        'num_steps': {'x': 1, 'y': 1, 'z': 1}, 
+        'step_sizes': {'x': 0, 'y': 0, 'z': 0}, 
+        'scn_mode': 0, 
+        'exp_t': 0.05, 
+        'acq_p': 0.05, 
+        'ang_s': 0, 
+        'ang_e': 180, 
+        'vel': 3, 
+        'acc_t': 1, 
+        'num_swing': 1, 
+        'out_pos': [None, None, None, None], 
+        'roi': None, 
+        'flts': [], 
+        'rel_out_flag': True, 
+        'simu': False, 
+        'enable_z': True, 
+        'repeat': 1, 
+        'sleep': 0, 
+        'cam': 'Andor',
         'introduction': ''' Description:
  '''
     }
@@ -311,6 +212,7 @@ def fxi_load_scan_list_user():
         'simu': False, 
         'ref_flat_scan': False, 
         'enable_z': True, 
+        'cam': 'Andor',
         'introduction': ''' Description:
  '''
     }
@@ -335,6 +237,7 @@ def fxi_load_scan_list_user():
         'repeat': None, 
         'ref_flat_scan': False, 
         'enable_z': True, 
+        'cam': 'Andor',
         'introduction': ''' Description:
  '''
     }
@@ -359,12 +262,43 @@ def fxi_load_scan_list_user():
         'repeat': None, 
         'ref_flat_scan': False, 
         'enable_z': True, 
+        'cam': 'Andor',
         'introduction': ''' Description:
  '''
     }
 
 
     txm_multi_edge_xanes_zebra = {
+        'edge_list': {'Ni': 'Ni_wl'}, 
+        'scan_type':"3D",
+        'flts': {'Ni': [1, 2, 3]}, 
+        'exp_t': {'Ni': 0.05}, 
+        'acq_p': {'Ni': 0.05}, 
+        'ang_s': 0, 
+        'ang_e': 180, 
+        'vel': 6, 
+        'acc_t': 1, 
+        'in_pos_list': [[None, None, None, None]], 
+        'out_pos': [None, None, None, None], 
+        'rel_out_flag': 0, 
+        'bin_fac': None, 
+        'bulk': False, 
+        'bulk_intgr': 10, 
+        'roi': None, 
+        'simu': False, 
+        'sleep': 0, 
+        'settle_time': 0, 
+        'repeat': None, 
+        'ref_flat_scan': False, 
+        'use_gui_pos': False, 
+        'cam': 'Andor',
+        'flyer': 'tomo_flyer',
+        'introduction': ''' Description:
+ '''
+    }
+
+
+    txm_multi_edge_xanes_zebra_legacy = {
         'elems': ['Ni_wl'], 
         'scan_type':"3D",
         'flts': {'Ni_filters': [1, 2, 3]}, 
@@ -426,6 +360,7 @@ def fxi_load_scan_list_user():
         'eng_3D': [10, 60], 
         'relative_move_flag': 0, 
         'simu': False, 
+        'cam': 'Andor',
         'introduction': ''' Description:
  '''
     }
@@ -445,18 +380,26 @@ def fxi_load_scan_list_user():
     }
 
 
-    txm_qingchao_scan = {
+    txm_multi_pos_xanes_3D = {
         'eng_list': [], 
-        'x_list1': None, 
-        'y_list1': None, 
-        'z_list1': None, 
-        'r_list1': None, 
-        'x_list2': None, 
-        'y_list2': None, 
-        'z_list2': None, 
-        'r_list2': None, 
+        'x_list': None, 
+        'y_list': None, 
+        'z_list': None, 
+        'r_list': None, 
+        'start_angle': None, 
+        'exposure_time': 0.05, 
+        'relative_rot_angle': 185, 
+        'period': 0.05, 
+        'out_x': 0, 
+        'out_y': 0, 
+        'out_z': 0, 
+        'out_r': 0, 
+        'rs': 2, 
+        'simu': False, 
+        'relative_move_flag': 1, 
+        'rot_first_flag': 1, 
         'sleep_time': 0, 
-        'num': 1, 
+        'repeat': 1, 
         'introduction': ''' Description:
  '''
     }
@@ -482,6 +425,7 @@ def fxi_load_scan_list_user():
         'noDark': False, 
         'noFlat': False, 
         'enable_z': True, 
+        'cam': 'Andor',
         'introduction': ''' Description:
  '''
     }
@@ -515,18 +459,10 @@ def fxi_load_scan_list_user():
 
     txm_user_fly_scan = {
         'exposure_time': 0.1, 
-        'rel_rot_ang': 180, 
-        'period': 0.15, 
+        'period': 0.1, 
         'chunk_size': 20, 
-        'out_x': None, 
-        'out_y': 2000, 
-        'out_z': None, 
-        'out_r': None, 
         'rs': 1, 
         'simu': False, 
-        'relative_move_flag': 1, 
-        'traditional_sequence_flag': 1, 
-        'flts': [], 
         'introduction': ''' Description:
  '''
     }
@@ -534,18 +470,10 @@ def fxi_load_scan_list_user():
 
     txm_user_fly_scan = {
         'exposure_time': 0.1, 
-        'rel_rot_ang': 180, 
-        'period': 0.15, 
+        'period': 0.1, 
         'chunk_size': 20, 
-        'out_x': None, 
-        'out_y': 2000, 
-        'out_z': None, 
-        'out_r': None, 
         'rs': 1, 
         'simu': False, 
-        'relative_move_flag': 1, 
-        'traditional_sequence_flag': 1, 
-        'flts': [], 
         'introduction': ''' Description:
  '''
     }
@@ -617,6 +545,23 @@ def fxi_load_scan_list_user():
     }
 
 
+    txm_z_scan_xh = {
+        'scan_motor': None, 
+        'start': -0.03, 
+        'stop': 0.03, 
+        'steps': 5, 
+        'out_x': -100, 
+        'out_y': -100, 
+        'out_z': 0, 
+        'chunk_size': 10, 
+        'exposure_time': 0.1, 
+        'relative_move_flag': 1, 
+        'cam': 'Andor',
+        'introduction': ''' Description:
+ '''
+    }
+
+
     txm_zps_motor_scan_with_Andor = {
         'motors': None, 
         'starts': None, 
@@ -632,16 +577,12 @@ def fxi_load_scan_list_user():
         'relative_move_flag': 1, 
         'simu': False, 
         'rot_first_flag': 0, 
+        'cam': 'Andor',
         'introduction': ''' Description:
  '''
     }
 
 
-    scan_list["txm__multi_pos_xanes_2D_xh"] = txm__multi_pos_xanes_2D_xh
-    scan_list["txm__multi_pos_xanes_3D_xh"] = txm__multi_pos_xanes_3D_xh
-    scan_list["txm__multi_pos_xanes_3D_zebra_xh"] = txm__multi_pos_xanes_3D_zebra_xh
-    scan_list["txm__xanes_3D_xh"] = txm__xanes_3D_xh
-    scan_list["txm__xanes_3D_zebra_xh"] = txm__xanes_3D_zebra_xh
     scan_list["txm_damon_scan"] = txm_damon_scan
     scan_list["txm_dummy_scan"] = txm_dummy_scan
     scan_list["txm_fly_scan2"] = txm_fly_scan2
@@ -650,14 +591,16 @@ def fxi_load_scan_list_user():
     scan_list["txm_insitu_xanes_scan"] = txm_insitu_xanes_scan
     scan_list["txm_mosaic_fly_scan"] = txm_mosaic_fly_scan
     scan_list["txm_mosaic_fly_scan_xh"] = txm_mosaic_fly_scan_xh
+    scan_list["txm_mosaic_zfly_scan_xh"] = txm_mosaic_zfly_scan_xh
     scan_list["txm_multi_edge_xanes"] = txm_multi_edge_xanes
     scan_list["txm_multi_edge_xanes2"] = txm_multi_edge_xanes2
     scan_list["txm_multi_edge_xanes3"] = txm_multi_edge_xanes3
     scan_list["txm_multi_edge_xanes_zebra"] = txm_multi_edge_xanes_zebra
+    scan_list["txm_multi_edge_xanes_zebra_legacy"] = txm_multi_edge_xanes_zebra_legacy
     scan_list["txm_multi_pos_2D_and_3D_xanes"] = txm_multi_pos_2D_and_3D_xanes
     scan_list["txm_multi_pos_2D_xanes_and_3D_tomo"] = txm_multi_pos_2D_xanes_and_3D_tomo
     scan_list["txm_multi_pos_3D_xanes"] = txm_multi_pos_3D_xanes
-    scan_list["txm_qingchao_scan"] = txm_qingchao_scan
+    scan_list["txm_multi_pos_xanes_3D"] = txm_multi_pos_xanes_3D
     scan_list["txm_rock_scan"] = txm_rock_scan
     scan_list["txm_scan_change_expo_time"] = txm_scan_change_expo_time
     scan_list["txm_tmp_scan"] = txm_tmp_scan
@@ -668,5 +611,6 @@ def fxi_load_scan_list_user():
     scan_list["txm_user_xanes"] = txm_user_xanes
     scan_list["txm_xxanes_scan"] = txm_xxanes_scan
     scan_list["txm_xxanes_scan2"] = txm_xxanes_scan2
+    scan_list["txm_z_scan_xh"] = txm_z_scan_xh
     scan_list["txm_zps_motor_scan_with_Andor"] = txm_zps_motor_scan_with_Andor
     return scan_list

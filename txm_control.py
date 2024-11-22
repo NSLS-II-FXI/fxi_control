@@ -22,7 +22,6 @@ from qtconsole.manager import QtKernelManager
 import threading
 import bluesky.plan_stubs as bps
 import ast
-import sys
 import numpy as np
 from epics import caget, caput
 from inspect import getmembers, isfunction
@@ -71,14 +70,17 @@ class OutputWrapper(QObject):
     def __getattr__(self, name):
         return getattr(self._stream, name)
 
-    def __del__(self):        
+    """
+    def __del__(self): 
+        import sys       
         try:
             if self._stdout:
                 sys.stdout = self._stream
             else:
                 sys.stderr = self._stream
-        except AttributeError:
-            pass
+        except Exception as err:
+            print(err)
+    """
 
 class Stream(QtCore.QObject):
     newText = QtCore.pyqtSignal(str)
@@ -896,7 +898,7 @@ class Filter_layout():
         else:
             self.button_filter_in.setStyleSheet('color: rgb(50, 50, 50);')
             self.button_filter_out.setStyleSheet('color: rgb(200, 50, 50);')
-        
+            
     def layout(self):
         lb_empty = QLabel()
         hbox = QHBoxLayout()
@@ -907,6 +909,8 @@ class Filter_layout():
         hbox.setAlignment(QtCore.Qt.AlignLeft)
         hbox.addStretch()
         return hbox
+
+
 
 class FixObj():
     def __init__(self, def_widget, font=None, name='', width=0, height=0):
@@ -967,13 +971,33 @@ class App(QWidget):
             reading_thread.current_position.connect(motor.fun_update_status)
             reading_thread.start()
             self.threads.append(reading_thread)
-         
+
+    def closeEvent(self, *args, **kwargs):
+        # self.pos_save()
+        super().closeEvent(*args, **kwargs)
+        
+        print('close window')
+        
+    def run_at_start(self):
+        try:
+            self.pos_load_last()
+            print('load previous sample positions')            
+        except Exception as err:
+            print(err)
+        try:
+            self.load_all_eng_list()
+            print('load previous energy list')
+        except Exception as err:
+            print(err)
+
     def initUI(self):
         self.setWindowTitle(self.title)
         self.setGeometry(self.left, self.top, self.width, self.height)
         self.font1 = QtGui.QFont('Arial', 12, QtGui.QFont.Bold)
         self.font2 = QtGui.QFont('Arial', 12, QtGui.QFont.Normal)
         self.font3 = QtGui.QFont('Arial', 14, QtGui.QFont.Normal)
+        self.fn_save_sample_pos = '/tmp/txm_sample_pos.json'
+        self.fn_save_eng_list = '/tmp/txm_energy_list.json'
         self.fpath = os.getcwd()
         self.pos = {}
         self.sample_pos = {}
@@ -1006,6 +1030,7 @@ class App(QWidget):
         layout.setAlignment(QtCore.Qt.AlignTop)
         self.setLayout(layout)
         self.pos_sync()
+        self.run_at_start()
 
     def layout_instruction(self):
         gpbox = QGroupBox()
@@ -1050,7 +1075,9 @@ class App(QWidget):
         hbox_motor.addLayout(self.vbox_pos_select_for_scan())
         hbox_motor.addWidget(lb_empty2)
 
-        hbox_motor.addLayout(self.vbox_beam_shutter())
+        #hbox_motor.addLayout(self.vbox_beam_shutter())
+        hbox_motor.addLayout(self.vbox_shutter_reload())
+        
         hbox_motor.setAlignment(QtCore.Qt.AlignLeft)
         hbox_motor.addStretch()
         vbox_motor = QVBoxLayout()
@@ -1266,6 +1293,24 @@ class App(QWidget):
         vbox = self.shutter.layout()
         return vbox
  
+    def vbox_reload(self):
+        self.pb_reload = FixObj(QPushButton, self.font1, 'Reload_GUI', 120, 30).run()
+        self.pb_reload.clicked.connect(self.reload_gui)
+        self.pb_reload.setStyleSheet('color: rgb(0, 80, 255)')
+        lb_reload_note = FixObj(QLabel, self.font2, 'Click "Save pos." before reload ', 220).run()
+        lb_reload_note.setStyleSheet('color: rgb(0, 80, 255)')
+        vbox = QVBoxLayout()
+        vbox.addWidget(self.pb_reload)
+        vbox.addWidget(lb_reload_note)
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        return vbox
+
+    def vbox_shutter_reload(self):
+        vbox = QVBoxLayout()
+        vbox.addLayout(self.vbox_beam_shutter())
+        vbox.addLayout(self.vbox_reload())
+        vbox.setAlignment(QtCore.Qt.AlignTop)
+        return vbox
     #############################
 
     def layout_scan(self):
@@ -1411,7 +1456,7 @@ class App(QWidget):
 
     def vbox_run_scan(self):
         self.lb_scan_msg = FixObj(QLabel, None, "Scan command / Message:", 500, 30).run()
-        self.tx_scan_msg = FixObj(QPlainTextEdit, self.font3, '', 800, 200).run()
+        self.tx_scan_msg = FixObj(QPlainTextEdit, self.font3, '', 750, 150).run()
 
         tx_empty = QLineEdit()
         tx_empty.setVisible(False)
@@ -1514,7 +1559,7 @@ class App(QWidget):
 
         #n = len(scan_list)
 
-        self.lst_scan = FixObj(QListWidget, self.font2, '', 200, 160).run()
+        self.lst_scan = FixObj(QListWidget, self.font2, '', 240, 160).run()
         self.lst_scan.setSelectionMode(QAbstractItemView.SingleSelection)
         self.load_scan_type_list(1) # load commonly used scans
 
@@ -1581,6 +1626,9 @@ class App(QWidget):
         return vbox
 
     def vbox_eng_list(self):
+        sep = FixObj(QLabel, None, '', 170, 5).run()
+        sep.setStyleSheet('background-color: rgb(0, 80, 255);')
+
         lb_title = FixObj(QLabel, self.font1, 'Energy list', 120).run()
         self.lst_eng_list = FixObj(QListWidget, self.font2, '', 160, 160).run()
         self.lst_eng_list.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -1609,6 +1657,12 @@ class App(QWidget):
         self.pb_rmall_eng_list = FixObj(QPushButton, self.font2, 'del. all', 80).run()
         self.pb_rmall_eng_list.clicked.connect(self.remove_all_eng_list)
 
+        self.pb_save_all_eng_list = FixObj(QPushButton, self.font2, 'Save all', 80).run()
+        self.pb_save_all_eng_list.clicked.connect(self.save_all_eng_list)
+
+        self.pb_load_all_eng_list = FixObj(QPushButton, self.font2, 'Load all', 80).run()
+        self.pb_load_all_eng_list.clicked.connect(self.load_all_eng_list)
+
         hbox1 = QHBoxLayout()
         hbox1.addWidget(lb_name)
         hbox1.addWidget(self.tx_eng_name)
@@ -1629,21 +1683,28 @@ class App(QWidget):
         hbox4.addWidget(self.pb_rmall_eng_list)
         hbox4.setAlignment(QtCore.Qt.AlignLeft)
 
+        hbox5 = QHBoxLayout()
+        hbox5.addWidget(self.pb_save_all_eng_list)
+        hbox5.addWidget(self.pb_load_all_eng_list)
+        hbox5.setAlignment(QtCore.Qt.AlignLeft)
+
         vbox1 = QVBoxLayout()
         vbox1.addLayout(hbox1)
         vbox1.addLayout(hbox2)
         vbox1.addLayout(hbox3)
         vbox1.addLayout(hbox4)
+        #vbox1.addWidget(sep)
+        #vbox1.addLayout(hbox5)
         vbox1.setAlignment(QtCore.Qt.AlignTop)
 
-        hbox2 = QHBoxLayout()
-        hbox2.addWidget(self.lst_eng_list)
-        hbox2.addLayout(vbox1)
-        hbox2.setAlignment(QtCore.Qt.AlignLeft)
+        hbox_comb = QHBoxLayout()
+        hbox_comb.addWidget(self.lst_eng_list)
+        hbox_comb.addLayout(vbox1)
+        hbox_comb.setAlignment(QtCore.Qt.AlignLeft)
 
         vbox = QVBoxLayout()
         vbox.addWidget(lb_title)
-        vbox.addLayout(hbox2)
+        vbox.addLayout(hbox_comb)
         vbox.setAlignment(QtCore.Qt.AlignTop)
 
         return vbox
@@ -1800,7 +1861,7 @@ class App(QWidget):
         lb_empty = FixObj(QLabel, self.font2, '', 30).run()
         hbox = {}
         vbox = QVBoxLayout()
-        for i in range(20):
+        for i in range(30):
             self.scan_lb[f'lb_{i}'] = FixObj(QLabel, self.font2, f'param {i}:', 160).run()
             self.scan_lb[f'lb_{i}'].setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             self.scan_lb[f'lb_{i}'].setVisible(False)
@@ -1830,7 +1891,7 @@ class App(QWidget):
         self.motor_display.append(self.display_txm_pix)
         widget_display_pix = self.display_txm_pix.layout()
 
-        for i in range(4):
+        for i in range(6):
             hbox[f'hbox_{i}'] = QHBoxLayout()
             for j in range(5):
                 hbox[f'hbox_{i}'].addWidget(self.scan_lb[f'lb_{i * 5 + j}'])
@@ -1888,7 +1949,7 @@ class App(QWidget):
         vbox.addLayout(hbox['note'])
         #vbox.addLayout(hbox_pos)
         vbox.addWidget(lb_empty2)
-        for i in range(4):
+        for i in range(6):
             vbox.addLayout(hbox[f'hbox_{i}'])
         vbox.addWidget(lb_empty3)
         vbox.addLayout(hbox_scan)
@@ -2028,6 +2089,7 @@ class App(QWidget):
         self.pos_num = 0
         self.lst_pos.clear()
         self.lst_scan_pos.clear()
+        self.pos_save()
 
     def pos_update(self):
         item = self.lst_pos.selectedItems()
@@ -2084,18 +2146,18 @@ class App(QWidget):
     def pos_save(self):
         n = len(self.pos)
         keys = self.pos.keys()
-        with open('/tmp/sample_pos.json', 'w') as f:
+        with open(self.fn_save_sample_pos, 'w') as f:
             json.dump(self.pos, f)
-        print('Position has been saved to /tmp/sample_pos.json\n')
+        print(f'Position has been saved to {self.fn_save_sample_pos}\n')
 
     def pos_load_last(self):
         self.pos = {}
         self.pos_num = 0
         self.lst_pos.clear()
         self.lst_scan_pos.clear()
-        with open('/tmp/sample_pos.json', 'r') as f:
+        with open(self.fn_save_sample_pos, 'r') as f:
             self.pos = json.load(f)
-        print('Load sample position from /tmp/sample_pos.json\n')
+        print(f'Load sample position from {self.fn_save_sample_pos}\n')
         for k in self.pos.keys():
             self.lst_pos.addItem(k)
             if k != 'Bkg':
@@ -2103,14 +2165,16 @@ class App(QWidget):
             else:
                 self.add_bkg_pos()
         self.lst_pos.sortItems()
+        QApplication.processEvents()
 
     def show_scan_example_sub(self, txm_scan):
-        for i in range(20):
+        n = len(txm_scan)
+        for i in range(30):
             self.scan_lb[f'lb_{i}'].setText(f'param {i}:')
             self.scan_lb[f'lb_{i}'].setVisible(False)
             self.scan_tx[f'tx_{i}'].setVisible(False)
         self.pb_record.setDisabled(True)
-        n = len(txm_scan)
+        
         i = 0
         flag_eng_list = 0
         intro = ''
@@ -2146,6 +2210,7 @@ class App(QWidget):
         item = self.lst_scan.selectedItems()
         self.scan_name = 'txm_' + item[0].text().replace(' ', '_')
         txm_scan = scan_list[self.scan_name]
+        #print(txm_scan)
         self.show_scan_example_sub(txm_scan)
         self.add_bkg_pos()
         self.select_eng_list()
@@ -2162,7 +2227,7 @@ class App(QWidget):
                     y = self.pos[pos]['y']
                     z = self.pos[pos]['z']
                     r = self.pos[pos]['r']
-                    for i in range(20):
+                    for i in range(30):
                         txt = self.scan_lb[f'lb_{i}'].text()
                         if 'out_x' in txt:
                             self.scan_tx[f'tx_{i}'].setText(str(x))
@@ -2248,6 +2313,7 @@ class App(QWidget):
     
     def pos_remove_all_select(self):
         self.lst_scan_pos.clear()
+
 
     def get_scan_pos_from_list(self):
         self.sample_pos = {}
@@ -2406,6 +2472,24 @@ class App(QWidget):
         pos_available = min(pos_available, len(self.txm_eng_list) + 2)
         return pos_available
 
+    def save_all_eng_list(self):
+        with open(self.fn_save_eng_list, 'w') as f:
+            json.dump(self.txm_eng_list, f)
+        #print(f'\nEnergy list has been saved to {self.fn_save_eng_list}\n')
+
+
+    def load_all_eng_list(self):
+        self.txm_eng_list = {}
+        self.lst_eng_list.clear()
+        with open(self.fn_save_eng_list, 'r') as f:
+            self.txm_eng_list = json.load(f) 
+        n = len(self.txm_eng_list)
+        keys = np.sort(list(self.txm_eng_list.keys()))
+        for k in keys:
+            eng_name = k
+            self.lst_eng_list.addItem(eng_name)
+            self.lst_eng_list.sortItems()
+
     def load_eng_list(self):
         global txm
         options = QFileDialog.Option()
@@ -2413,18 +2497,19 @@ class App(QWidget):
         fn, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "", file_type, options=options)
         if fn:
             try:
-                eng_list = np.array(np.loadtxt(fn))
-            except:
+                eng_list = np.array(np.loadtxt(fn))            
+                eng_name = self.tx_eng_name.text()
+                available_id = self.get_available_eng_list_id()
+                eng_name = f'E_{available_id:02d}_{eng_name}'
+                # self.txm_eng_list[eng_name] = eng_list
+                self.txm_eng_list[eng_name] = fn
+                self.lst_eng_list.addItem(eng_name)
+                self.lst_eng_list.sortItems()
+                self.save_all_eng_list()
+            except Exception as err:
+                print(f'\nfail to load energy file: "{fn}"\n')
                 #eng_list = [eval(self.lb_motor_pos_e.text())]
-                eng_list = [eval(self.mot_sample_e.label_motor_pos.text())]
-            eng_name = self.tx_eng_name.text()
-            available_id = self.get_available_eng_list_id()
-            eng_name = f'E_{available_id:02d}_{eng_name}'
-            # self.txm_eng_list[eng_name] = eng_list
-            self.txm_eng_list[eng_name] = fn
-
-            self.lst_eng_list.addItem(eng_name)
-            self.lst_eng_list.sortItems()
+                #eng_list = [eval(self.mot_sample_e.label_motor_pos.text())]
 
     def select_eng_list(self):
         global EL
@@ -2481,10 +2566,12 @@ class App(QWidget):
             del self.txm_eng_list[eng_name]
             self.lst_eng_list.takeItem(self.lst_eng_list.row(item[0]))
         self.lst_eng_list.sortItems()
+        self.save_all_eng_list()
 
     def remove_all_eng_list(self):
         self.txm_eng_list = {}
         self.lst_eng_list.clear()
+        self.save_all_eng_list()
 
     def use_current_eng(self):
         eng = self.mot_sample_e.label_motor_pos.text()
@@ -2615,6 +2702,14 @@ class App(QWidget):
             self.terminal.moveCursor(QtGui.QTextCursor.End)
             with open('/tmp/scan_output.txt', 'w') as f:
                 f.write(txt)
+
+    def reload_gui(self):
+        print(sys.executable)
+        print(sys.argv)
+        os.execl(sys.executable,sys.executable, '/nsls2/conda/envs/2022-2.0-py39-tiled/bin/ipython',
+                                                '--profile=collection',
+                                                '--IPCompleter.use_jedi=False',
+                                              sys.argv[0])
 
     def load_scan_type_list(self, scan_type=1, fpath_scan_list=''):
         global scan_list
@@ -3543,7 +3638,7 @@ class App(QWidget):
         lb_empty2 = QLabel()        
         lb_msg = FixObj(QLabel, self.font1, 'Python input', 120, 27).run()
 
-        self.tx_var_file_msg = FixObj(QPlainTextEdit, self.font2, '', 250, 200).run()
+        self.tx_var_file_msg = FixObj(QPlainTextEdit, self.font2, '', 250, 150).run()
 
         vbox = QVBoxLayout()
         vbox.addWidget(lb_msg)
@@ -3583,7 +3678,7 @@ class App(QWidget):
     def vbox_global_var_name_list(self):
         lb_var_list = FixObj(QLabel, self.font1, 'Var.', 70, 27).run()
 
-        self.lst_saved_var = FixObj(QListWidget, self.font2, '', 200, 200).run()
+        self.lst_saved_var = FixObj(QListWidget, self.font2, '', 200, 150).run()
         #self.lst_saved_var.setFixedHeight(200)
         #self.lst_saved_var.setFixedWidth(150)
         #self.lst_saved_var.setFont(self.font2)
@@ -3606,7 +3701,7 @@ class App(QWidget):
         return vbox
     '''
     def vbox_global_var_value_editor(self):
-        self.tx_saved_var_value = FixObj(QPlainTextEdit, self.font2, '', 350, 200).run()
+        self.tx_saved_var_value = FixObj(QPlainTextEdit, self.font2, '', 350, 150).run()
         
         lb_value_list = FixObj(QLabel, self.font1, 'Value', 70, 27).run()
         vbox = QVBoxLayout()
