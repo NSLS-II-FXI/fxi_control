@@ -437,9 +437,9 @@ class Motor_base():
             l_h = float(limit[1])
             flag = 0
             try:
-                val = np.float(self.editor_setpos.text())
+                val = float(self.editor_setpos.text())
             except:
-                val = np.float(self.label_motor_pos.text())
+                val = float(self.label_motor_pos.text())
             if abs(l_l - l_h) < 0.01: # l_l == l_h means not limit:
                 flag = 1
             else: 
@@ -449,9 +449,9 @@ class Motor_base():
                     flag = 0
         except: # limit is not found for the motor
             try:
-                val = np.float(self.editor_setpos.text())
+                val = float(self.editor_setpos.text())
             except:
-                val = np.float(self.label_motor_pos.text())
+                val = float(self.label_motor_pos.text())
             flag = 1
         return flag, val
 
@@ -602,9 +602,9 @@ class PZT_th2_chi2(Motor_layout):
 
     def fun_move_to_pos(self):
         try:
-            val = np.float(self.editor_setpos.text())
+            val = float(self.editor_setpos.text())
         except:
-            val = np.float(self.label_motor_pos.text())
+            val = float(self.label_motor_pos.text())
         pv = self.mot.prefix + 'SET_POSITION.A'
         caput(pv, val)
 
@@ -2322,7 +2322,7 @@ class App(QWidget):
             pos = item.text()
             self.sample_pos[pos] = self.pos[pos]
 
-    def check_scan(self, use_exist_pos=False):
+    def check_scan(self, use_exist_pos=False, set_mag=0):
         self.txm_scan = {}
         flag_multi_pos_scan = 0
         if not use_exist_pos:
@@ -2428,9 +2428,14 @@ class App(QWidget):
 
         self.txm_scan['XEng'] = eng
         try:
-            mag = float(self.tx_set_zp_mag.text())    
+            if set_mag == 0:
+                mag = float(self.tx_set_zp_mag.text())  
+                self.txm_scan['Mag'] = mag  
+            else:
+                mag = set_mag
         except:
             mag = None
+            self.txm_scan['Mag'] = 'None'
  
         cmd_move_eng = f'RE(move_zp_ccd_TEST({eng}, mag={mag}))\n'
 
@@ -2823,6 +2828,7 @@ class App(QWidget):
 
         self.show_scan_example_sub(scan_list[f'txm_{scan_name}'])  # default view first
         self.txm_scan = self.txm_record_scan[record_scan_name].copy()
+        mag = self.txm_scan['Mag']
         for i in range(20):
             if self.scan_lb[f'lb_{i}'].isVisible():
                 param = self.scan_lb[f'lb_{i}'].text()[:-1]  # remove ":" at end of string
@@ -2847,7 +2853,7 @@ class App(QWidget):
         self.tx_pos.setText(pos[:-1])
         self.scan_name = 'txm_' + scan_name  # this is global
         self.sample_pos = self.txm_scan['pos'].copy()
-        self.check_scan(use_exist_pos=True)
+        self.check_scan(use_exist_pos=True, set_mag=mag)
 
     def remove_recorded_scan(self):
         item = self.lst_record_scan.selectedItems()
@@ -2873,9 +2879,13 @@ class App(QWidget):
                 self.tx_scan_msg.setPlainText(msg)
             self.lst_assembled_scan.addItem(f'sleep_{sleep_time}s')
         if self.rd_op_select_scan.isChecked():
-            item = self.lst_record_scan.selectedItems()
-            scan_name = item[0].text()
-            self.lst_assembled_scan.addItem(scan_name)
+            try:
+                item = self.lst_record_scan.selectedItems()
+                scan_name = item[0].text()
+                self.lst_assembled_scan.addItem(scan_name)
+            except Exception as err:
+                print(err)
+                self.tx_scan_msg.setPlainText(str(err))
 
     def remove_assemble_scan(self):
         item = self.lst_assembled_scan.selectedItems()
@@ -2999,7 +3009,9 @@ class App(QWidget):
 
         # get energy
         eng = scan['XEng']
-        cmd_move_eng = ' ' * (n_repeat * 4 + 4) + f'yield from move_zp_ccd({eng})'
+        mag = scan['Mag']
+        #cmd_move_eng = ' ' * (n_repeat * 4 + 4) + f'yield from move_zp_ccd({eng})'
+        cmd_move_eng = ' ' * (n_repeat * 4 + 4) + f'yield from move_zp_ccd_TEST({eng}, mag={mag})'
         cmd_all += cmd_move_eng + '\n'
 
         cmd_eng_list = ''
@@ -3472,8 +3484,8 @@ class App(QWidget):
 
     def vbox_motor_cond(self):
         self.mot_cond_x = Motor_layout(self, 'clens.x', 'Cond.x', 'um')
-        self.mot_cond_y1 = Motor_layout(self, 'clens.y1', 'Cond.y1', 'um')
-        self.mot_cond_y2 = Motor_layout(self, 'clens.y2', 'Cond.y2', 'um')
+        self.mot_cond_y1 = Motor_layout(self, 'clens.y1', 'Cond.y1', 'mm')
+        self.mot_cond_y2 = Motor_layout(self, 'clens.y2', 'Cond.y2', 'mm')
         self.mot_cond_z1 = Motor_layout(self, 'clens.z1', 'Cond.z1', 'um')
         self.mot_cond_z2 = Motor_layout(self, 'clens.z2', 'Cond.z2', 'um')
         self.mot_cond_pit = Motor_layout(self, 'clens.p', 'Cond.pit', 'um')
@@ -3957,6 +3969,7 @@ class App(QWidget):
             eng_id = int(item_name.split('_')[0])
             remove_caliber_pos(eng_id)
         self.display_calib_eng_only()
+        self.selected_calib_energy = {}
 
     def get_caliber_eng(self):
         calib_eng_list = []
