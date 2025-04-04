@@ -2432,10 +2432,9 @@ class App(QWidget):
                 mag = float(self.tx_set_zp_mag.text())  
                 self.txm_scan['Mag'] = mag  
             else:
-                mag = set_mag
+                mag = set_mag  
         except:
             mag = None
-            self.txm_scan['Mag'] = 'None'
  
         cmd_move_eng = f'RE(move_zp_ccd_TEST({eng}, mag={mag}))\n'
 
@@ -2989,7 +2988,7 @@ class App(QWidget):
         cmd = ''
         scan = self.txm_record_scan[scan_name]
         for k in scan.keys():
-            if k == 'name' or k == 'pos' or k == 'XEng':
+            if k == 'name' or k == 'pos' or k == 'XEng' or k == 'Mag':
                 continue
             if 'eng_list' in scan.keys():
                 if k == scan['eng_list']:
