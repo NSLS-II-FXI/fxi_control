@@ -42,7 +42,6 @@ def fxi_load_scan_list_common():
         'filters': [], 
         'add_bkg_filt_only': False, 
         'rot_back_velo': 30, 
-        'binning': None, 
         'move_to_ini_pos': True, 
         'simu': False, 
         'take_bkg_img': True, 
@@ -68,7 +67,6 @@ def fxi_load_scan_list_common():
         'chunk_size': 5, 
         'simu': False, 
         'relative_move_flag': True, 
-        'binning': [2, 2], 
         'introduction': ''' Description:
  '''
     }
@@ -144,7 +142,7 @@ def fxi_load_scan_list_common():
         'out_z': None, 
         'out_r': None, 
         'img_sizeX': 2048, 
-        'img_sizeY': 2048, 
+        'img_sizeY': 2040, 
         'pxl': 20, 
         'chunk_size': 1, 
         'simu': False, 
@@ -166,7 +164,7 @@ def fxi_load_scan_list_common():
         'out_z': 0, 
         'out_r': 0, 
         'img_sizeX': 2048, 
-        'img_sizeY': 2048, 
+        'img_sizeY': 2040, 
         'pxl': 20, 
         'chunk_size': 1, 
         'simu': False, 
@@ -187,7 +185,7 @@ def fxi_load_scan_list_common():
         'out_z': None, 
         'out_r': None, 
         'img_sizeX': 2048, 
-        'img_sizeY': 2048, 
+        'img_sizeY': 2040, 
         'pxl': 20, 
         'chunk_size': 1, 
         'simu': False, 
@@ -212,7 +210,7 @@ def fxi_load_scan_list_common():
         'out_z': None, 
         'out_r': None, 
         'img_sizeX': 2048, 
-        'img_sizeY': 2048, 
+        'img_sizeY': 2040, 
         'pxl': 20, 
         'chunk_size': 5, 
         'simu': False, 
@@ -282,7 +280,6 @@ def fxi_load_scan_list_common():
         'relative_move_flag': 1, 
         'rot_first_flag': 1, 
         'filters': [], 
-        'binning': [2, 2], 
         'introduction': ''' Description:
  '''
     }

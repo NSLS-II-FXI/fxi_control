@@ -1,0 +1,42 @@
+    EFFICIENCY: Not determined;    
+
+
+scan finished
+
+
+
+print(self.scan_output_txt[-10:])
+nished
+
+
+
+
+
+                                                                                                                                           
+
+
+                                                                                                                                              
+
+[A[A[A+-----------+------------+------------+------------+------------+------------+--------------------+------------+
+generator fly_scan ['e708d0a8'] (scan num: 3660)
+unstage attempt 0
+Tue May 24 14:54:13 2022 unstage 0.0239 sec
+scan finished
+#3660  (uid: e708d0,  X_Eng: 8.2000 keV,  Time: 05/24/22 14:54)
+fly_scan(exposure_time=0.05, start_angle=None, relative_rot_angle=10, period=0.05, out_x=None, out_y=None, out_z=None, out_r=None, rs=3, relative_move_flag=1, rot_first_flag=1, filters=None, binning=None, note=None)
+Zone Plate info:  OUT_ZONE_WIDTH: 30;    ZONE_DIAMETER: 244;    MANUFACTURE: NanoTools;    EFFICIENCY: Not determined;    
+
+
+scan finished
+
+
+
+print(self.scan_output_txt[-10:])
+nished
+
+
+
+
+a = self.scan_output_txt.split('\n')
+print(a[-10:])
+['', '', '', 'print(self.scan_output_txt[-10:])', 'nished', '', '', '', '', '']

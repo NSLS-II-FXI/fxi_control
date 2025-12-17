@@ -127,6 +127,7 @@ def fxi_load_scan_list_other():
         'out_r': 0, 
         'period': 0.1, 
         'num_img': 10, 
+        'num_bkg': 10, 
         'relative_move_flag': False, 
         'sleep_time': 0, 
         'rot_first_flag': 1, 
@@ -146,8 +147,10 @@ def fxi_load_scan_list_other():
         'out_r': 0, 
         'num_img': 10, 
         'take_dark_img': True, 
+        'take_bkg_img': True, 
         'relative_move_flag': 1, 
         'rot_first_flag': 1, 
+        'close_shutter_at_end': True, 
         'simu': False, 
         'introduction': ''' Description:
  '''
@@ -166,13 +169,13 @@ def fxi_load_scan_list_other():
 
 
     txm_z_scan = {
-        'scan_motor': 'zp_z', 
+        'scan_motor': "zp.z", 
         'start': -0.03, 
         'stop': 0.03, 
-        'steps': 5, 
-        'out_x': -100, 
+        'steps': 31, 
+        'out_x': None, 
         'out_y': -100, 
-        'out_z': 0, 
+        'out_z': None, 
         'chunk_size': 10, 
         'exposure_time': 0.1, 
         'relative_move_flag': 1, 
@@ -184,7 +187,7 @@ def fxi_load_scan_list_other():
     txm_z_scan2 = {
         'start': -0.03, 
         'stop': 0.03, 
-        'steps': 5, 
+        'steps': 31, 
         'out_x': -100, 
         'out_y': -100, 
         'out_z': 0, 
@@ -198,7 +201,7 @@ def fxi_load_scan_list_other():
     txm_z_scan3 = {
         'start': -0.03, 
         'stop': 0.03, 
-        'steps': 5, 
+        'steps': 31, 
         'out_x': -100, 
         'out_y': -100, 
         'chunk_size': 10, 

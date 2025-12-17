@@ -4185,7 +4185,7 @@ def convert_fun_dict(fun_name):
     lines.append(space4 + 'txm_' + fun_name + ' = {')
 
     for k, v in signature.parameters.items():
-        if k == 'md' or k == 'note' or k == 'binning':
+        if k == 'md' or k == 'note':# or k == 'binning':
             continue
         if v.default is inspect.Parameter.empty:
             if 'detectors' in k or 'eng_list' in k or 'filter' in k:
