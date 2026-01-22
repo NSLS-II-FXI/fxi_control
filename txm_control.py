@@ -5,7 +5,7 @@ import os
 import threading
 import time
 import json
-import PySide6
+
 from qtpy import QtGui, QtCore
 from qtpy.QtCore import QThread, QObject, Signal as pyqtSignal, Slot as pyqtSlot, QProcess
 from qtpy.QtWidgets import (QMainWindow, QFileDialog, QRadioButton, QApplication, QWidget, QFrame,
