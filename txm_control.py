@@ -5,14 +5,15 @@ import os
 import threading
 import time
 import json
-from PyQt5 import QtGui, QtCore
-from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSignal, pyqtSlot, QProcess, QTextCodec
-from PyQt5.QtWidgets import (QMainWindow, QFileDialog, QRadioButton, QApplication, QWidget, QFrame,
-                             QLineEdit, QPlainTextEdit, QWidget, QPushButton, QLabel, QCheckBox, QGroupBox,
-                             QScrollBar, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QTextBrowser,
-                             QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea,
-                             QSlider, QComboBox, QButtonGroup, QMessageBox, QSizePolicy)
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QFont, QColor
+import PySide6
+from qtpy import QtGui, QtCore
+from qtpy.QtCore import QThread, QObject, Signal as pyqtSignal, Slot as pyqtSlot, QProcess
+from qtpy.QtWidgets import (QMainWindow, QFileDialog, QRadioButton, QApplication, QWidget, QFrame,
+                            QLineEdit, QPlainTextEdit, QWidget, QPushButton, QLabel, QCheckBox, QGroupBox,
+                            QScrollBar, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QTextBrowser,
+                            QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea,
+                            QSlider, QComboBox, QButtonGroup, QMessageBox, QSizePolicy)
+from qtpy.QtGui import QIntValidator, QDoubleValidator, QFont, QColor
 from qtconsole.rich_jupyter_widget import RichIPythonWidget, RichJupyterWidget
 from qtconsole.inprocess import QtInProcessKernelManager
 #from IPython.lib import guisupport
@@ -52,7 +53,7 @@ def make_jupyter_widget_with_kernel():
     return jupyter_widget
 
 class OutputWrapper(QObject):
-    outputWritten = QtCore.pyqtSignal(object, object)
+    outputWritten = QtCore.Signal(object, object)
     def __init__(self, parent, stdout=True):
         super().__init__(parent)
         if stdout:
@@ -71,8 +72,8 @@ class OutputWrapper(QObject):
         return getattr(self._stream, name)
 
     """
-    def __del__(self): 
-        import sys       
+    def __del__(self):
+        import sys
         try:
             if self._stdout:
                 sys.stdout = self._stream
@@ -83,7 +84,7 @@ class OutputWrapper(QObject):
     """
 
 class Stream(QtCore.QObject):
-    newText = QtCore.pyqtSignal(str)
+    newText = QtCore.Signal(str)
     def write(self, text):
         self.newText.emit(str(text))
     '''
@@ -97,25 +98,25 @@ class ConsoleWidget(RichIPythonWidget):
 
         if customBanner is not None:
             self.banner = customBanner
-     
+
         self.kernel_manager = QtInProcessKernelManager()
         self.kernel_manager.start_kernel(show_banner=False)
 
-        self.kernel = self.kernel_manager.kernel        
+        self.kernel = self.kernel_manager.kernel
         self.kernel.gui = 'qt'
 
         self.kernel_client = kernel_client = self._kernel_manager.client()
         self.kernel_client.start_channels()
-        
+
         #self.push_vars(namespace)
         #kernel.shell.push({'foo': 43, 'print_process_id': print_process_id})
         #fn = '/home/gemy/.ipython/profile_default/startup/00.py'
-        #kernel.shell.safe_execfile(fn, kernel.shell.user_global_ns)  
+        #kernel.shell.safe_execfile(fn, kernel.shell.user_global_ns)
         #print(fn)
-        
+
         self.set_default_style('linux')
         #self.font = QtGui.QFont(self.font.family(), 16);
-                
+
         def stop():
             self.kernel_client.stop_channels()
             self.kernel_manager.shutdown_kernel()
@@ -186,10 +187,10 @@ class Get_motor_reading(QThread):
             self.current_position.emit(current_pos)
             i += 1
             time.sleep(0.2)
-            
+
 class Shutter():
     def __init__(self, obj):
-        
+
         self.obj = obj
         self.font1 = QtGui.QFont('Arial', 12, QtGui.QFont.Bold)
         self.font2 = QtGui.QFont('Arial', 12, QtGui.QFont.Normal)
@@ -277,18 +278,18 @@ class Shutter():
     def fun_update_beam_current(self):
         beam_value = beam_current.read()['beam_current']['value']
         self.label_lb_beam_current.setText(f'{beam_value:3.1f} mA')
-    
+
     def fun_update_shutter_status(self, shutter_value):
         #shutter_value = shutter_status.read()['shutter_status']['value']
         if shutter_value == 1:
-            sh_status = 'Closed' 
+            sh_status = 'Closed'
             stylesheet = 'color: rgb(200, 50, 50)' # display red
         else:
-            sh_status = 'Open' 
+            sh_status = 'Open'
             stylesheet = 'color: rgb(50, 200, 50)' # display green
         self.label_lb_shutter_status.setText(sh_status)
         self.label_lb_shutter_status.setStyleSheet(stylesheet)
-        
+
     def fun_update_status(self, shutter_value):
         self.fun_update_beam_current()
         self.fun_update_shutter_status(shutter_value)
@@ -338,7 +339,7 @@ class TXM_ZP_mag():
         hbox_txm_mag.addWidget(self.lb_current_mag)
         hbox_txm_mag.addWidget(self.obj.lb_current_mag)
         hbox_txm_mag.setAlignment(QtCore.Qt.AlignTop)
-        
+
         hbox_txm_pix = QHBoxLayout()
         hbox_txm_pix.addWidget(self.lb_pix_size)
         hbox_txm_pix.addWidget(self.obj.lb_pix_size)
@@ -357,7 +358,7 @@ class TXM_ZP_mag():
         vbox_pix_mag.setAlignment(QtCore.Qt.AlignCenter)
         return vbox_pix_mag
 
-    def fun_update_status(self, txm_mag):   
+    def fun_update_status(self, txm_mag):
         self.obj.lb_current_mag.setText(f'{txm_mag*GLOBAL_VLM_MAG:3.2f}')
         self.obj.lb_zp_mag.setText(f'{txm_mag:3.2f}')
         self.obj.lb_pix_size.setText(f'{6500./txm_mag/GLOBAL_VLM_MAG:2.2f} nm')
@@ -371,7 +372,7 @@ class display_pix_size():
         self.obj.lb_pix_size2 = FixObj(QLabel, self.font2, '', 120).run()
 
     def layout(self):
-        return self.obj.lb_pix_size2   
+        return self.obj.lb_pix_size2
 
     def fun_update_status(self, txm_mag):
         self.obj.lb_pix_size2.setText(f'{6500./txm_mag/GLOBAL_VLM_MAG:2.2f} nm')
@@ -387,25 +388,25 @@ class Motor_base():
         self.unit = unit
         self.mot = eval(motor_name)
         self.init_motor_component()
-        self.init_connect_function()        
+        self.init_connect_function()
 
     def init_motor_component(self):
-        self.editor_setpos = self.tx_editor_setpos()        
+        self.editor_setpos = self.tx_editor_setpos()
         self.label_motor_pos = self.lb_label_motor_pos()
         self.button_step_plus = self.pb_button_step_plus()
         self.button_step_minus = self.pb_button_step_minus()
         self.editor_step_size = self.tx_editor_step_size()
 
-    def init_connect_function(self): 
+    def init_connect_function(self):
         self.editor_setpos.returnPressed.connect(self.fun_move_to_pos)
         self.button_step_plus.clicked.connect(lambda: self.fun_move_plus_minus('plus'))
-        self.button_step_minus.clicked.connect(lambda: self.fun_move_plus_minus('minus'))   
-   
+        self.button_step_minus.clicked.connect(lambda: self.fun_move_plus_minus('minus'))
+
     def tx_editor_setpos(self):
         self.obj.tx_setpos = FixObj(QLineEdit, self.font2, '0', 80).run()
         self.obj.tx_setpos.setValidator(QDoubleValidator())
         return self.obj.tx_setpos
-    
+
     def lb_label_motor_pos(self):
         self.obj.lb_motor_pos = FixObj(QLabel, self.font2, '', 80).run()
         return self.obj.lb_motor_pos
@@ -413,14 +414,14 @@ class Motor_base():
     def pb_button_step_plus(self):
         self.obj.pb_motor_plus = FixObj(QPushButton, self.font2, '+', 40).run()
         return self.obj.pb_motor_plus
-    
+
     def pb_button_step_minus(self):
         self.obj.pb_motor_minus = FixObj(QPushButton, self.font2, '-', 40).run()
         return self.obj.pb_motor_minus
-        
+
     def tx_editor_step_size(self):
         self.obj.tx_step = FixObj(QLineEdit, self.font2, '', 60).run()
-        self.obj.tx_step.setValidator(QDoubleValidator(decimals=3))  
+        self.obj.tx_step.setValidator(QDoubleValidator(decimals=3))
         return self.obj.tx_step
 
     def lb_unit(self):
@@ -442,7 +443,7 @@ class Motor_base():
                 val = float(self.label_motor_pos.text())
             if abs(l_l - l_h) < 0.01: # l_l == l_h means not limit:
                 flag = 1
-            else: 
+            else:
                 if val >= l_l and val <= l_h:
                     flag = 1
                 else:
@@ -461,7 +462,7 @@ class Motor_base():
             try:
                 self.editor_setpos.setDisabled(True)
                 #RE(mv(self.mot, val))
-                caput(self.mot.prefix, val)                
+                caput(self.mot.prefix, val)
             except:
                 msg = f'fails to move {self.motor_name}'
                 print(msg)
@@ -492,28 +493,28 @@ class Motor_base():
         elif direction == 'minus':
             self.editor_setpos.setText(f'{(current_pos - ss):4.3f}')
         else:
-            self.editor_setpos.setText(f'{(current_pos):4.3f}')       
-        self.fun_move_to_pos()    
-    
+            self.editor_setpos.setText(f'{(current_pos):4.3f}')
+        self.fun_move_to_pos()
+
     def fun_update_status(self, current_pos):
         self.label_motor_pos.setText(f'{current_pos:4.4f}')
-    
+
 class Motor_layout(Motor_base):
     def __init__(self, obj, motor_name, motor_label='', unit='um'):
-        super().__init__(obj, motor_name, motor_label, unit)   
+        super().__init__(obj, motor_name, motor_label, unit)
         self.button_reset_reading = self.pb_button_reset_reading()
         self.editor_reset_reading = self.tx_editor_reset_reading()
         self.init_motor_component_motor()
         self.init_connect_function_motor()
         self.init_pos_display_motor()
- 
+
     def init_motor_component_motor(self):
         self.button_reset_reading = self.pb_button_reset_reading()
         self.editor_reset_reading = self.tx_editor_reset_reading()
 
-    def init_connect_function_motor(self): 
+    def init_connect_function_motor(self):
         self.button_reset_reading.clicked.connect(self.fun_reset_reading)
-     
+
     def init_pos_display_motor(self):
         current_pos = self.mot.position
         step_size = self.mot.step_size.get()
@@ -531,7 +532,7 @@ class Motor_layout(Motor_base):
 
     def tx_editor_reset_reading(self):
         self.obj.tx_set_read = FixObj(QLineEdit, self.font2, '', 80).run()
-        self.obj.tx_set_read.setValidator(QDoubleValidator()) 
+        self.obj.tx_set_read.setValidator(QDoubleValidator())
         return self.obj.tx_set_read
 
     def fun_reset_reading(self):
@@ -548,7 +549,7 @@ class Motor_layout(Motor_base):
 
     def layout(self):
         lb_empty = FixObj(QLabel, None, '', 10).run()
-        
+
         lb_motor = FixObj(QLabel, self.font1, self.motor_label + ':', 75).run()
         lb_motor.setAlignment(QtCore.Qt.AlignVCenter)
         lb_unit = self.lb_unit()
@@ -597,8 +598,8 @@ class PZT_th2_chi2(Motor_layout):
         elif direction == 'minus':
             self.editor_setpos.setText(f'{(current_pos - ss):4.3f}')
         else:
-            self.editor_setpos.setText(f'{(current_pos):4.3f}')        
-        self.fun_move_to_pos()  
+            self.editor_setpos.setText(f'{(current_pos):4.3f}')
+        self.fun_move_to_pos()
 
     def fun_move_to_pos(self):
         try:
@@ -636,11 +637,11 @@ class DCM_th2_chi2(Motor_layout):
         self.init_motor_component_dcm()
         self.init_connect_function_dcm()
         self.init_pos_display_motor_dcm()
-        
+
     def init_motor_component_dcm(self):
         self.button_feedback_enable = self.pb_button_feedback_enable()
         self.editor_feedback_val = self.tx_editor_feedback_val()
-        
+
     def init_connect_function_dcm(self):
         self.button_feedback_enable.clicked.connect(self.fun_enable_feedback)
         self.editor_feedback_val.returnPressed.connect(self.fun_change_feedback_val)
@@ -655,8 +656,8 @@ class DCM_th2_chi2(Motor_layout):
         else:
             self.button_feedback_enable.setText('Feedback Off')
             self.button_feedback_enable.setStyleSheet('color: rgb(50, 50, 50);')
-        
-    def fun_enable_feedback(self): 
+
+    def fun_enable_feedback(self):
         # check feedback on motor: dcm_th2_/ dcm_chi2
         current_feedback_val = self.mot.feedback.get()
         current_feedback_status = self.mot.feedback_enable.get() # 1:on  0:off
@@ -669,7 +670,7 @@ class DCM_th2_chi2(Motor_layout):
         RE(mv(self.mot.feedback_enable, set_feedback_status))
         new_feedback_status = self.mot.feedback_enable.get()
         self.fun_update_feedback_status(new_feedback_status)
-    
+
     def fun_update_feedback_status(self, new_feedback_status):
         #new_feedback_status = self.mot.feedback_enable.get()
         if new_feedback_status == 1:
@@ -683,7 +684,7 @@ class DCM_th2_chi2(Motor_layout):
         self.label_motor_pos.setText(f'{current_pos:4.4f}')
         new_feedback_status = self.mot.feedback_enable.get()
         self.fun_update_feedback_status(new_feedback_status)
- 
+
 
     def fun_change_feedback_val(self):
         current_feedback_val = self.mot.feedback.get()
@@ -697,7 +698,7 @@ class DCM_th2_chi2(Motor_layout):
 
     def tx_editor_feedback_val(self):
         self.obj.tx_feedback_val = FixObj(QLineEdit, self.font2, '', 75).run()
-        self.obj.tx_feedback_val.setValidator(QDoubleValidator()) 
+        self.obj.tx_feedback_val.setValidator(QDoubleValidator())
         return self.obj.tx_feedback_val
 
     def fun_update_status(self, current_pos):
@@ -730,7 +731,7 @@ class DCM_th2_chi2(Motor_layout):
 
 class Sample_motor_layout(Motor_layout):
     def __init__(self, obj, motor_name, motor_label='', unit='um'):
-        super().__init__(obj, motor_name, motor_label, unit) 
+        super().__init__(obj, motor_name, motor_label, unit)
         self.init_motor_component_sample()
         self.init_pos_display_sample()
 
@@ -743,11 +744,11 @@ class Sample_motor_layout(Motor_layout):
             high_limit = self.mot.high_limit.get()
             self.label_lb_pos_limit.setText(f'({low_limit:4.0f}, {high_limit:4.0f})')
         except:
-            pass  
-    
+            pass
+
     def lb_pos_limit(self):
         self.obj.lb_limit = FixObj(QLabel, self.font2, '(-4000, 4000)', 120).run()
-        return self.obj.lb_limit 
+        return self.obj.lb_limit
 
     def pb_button_reset_reading(self):
         self.obj.pb_set_read = FixObj(QPushButton, self.font2, 'Reset to:', 100).run()
@@ -756,7 +757,7 @@ class Sample_motor_layout(Motor_layout):
 
     def tx_editor_reset_reading(self):
         self.obj.tx_set_read = FixObj(QLineEdit, self.font2, '', 80).run()
-        self.obj.tx_set_read.setValidator(QDoubleValidator()) 
+        self.obj.tx_set_read.setValidator(QDoubleValidator())
         self.obj.tx_set_read.setVisible(False)
         return self.obj.tx_set_read
 
@@ -786,7 +787,7 @@ class Sample_motor_layout(Motor_layout):
 
 class XEng_motor_layout(Motor_layout):
     def __init__(self, obj, motor_name, motor_label='', unit='um'):
-        super().__init__(obj, motor_name, motor_label, unit)   
+        super().__init__(obj, motor_name, motor_label, unit)
         self.label_eng_calib = self.lb_eng_calib()
 
     def lb_eng_calib(self):
@@ -814,7 +815,7 @@ class XEng_motor_layout(Motor_layout):
         hbox.addWidget(self.cbox_dcm_only)
         hbox.addWidget(lb_empty)
         hbox.setAlignment(QtCore.Qt.AlignLeft)
-        
+
         return hbox
 
     def fun_move_to_pos(self):
@@ -829,7 +830,7 @@ class XEng_motor_layout(Motor_layout):
                     set_mag = self.obj.tx_set_zp_mag.text()
                     try:
                         mag = float(set_mag)
-                    except Exception as err:                        
+                    except Exception as err:
                         mag = None
                     finally:
                         RE(move_zp_ccd_TEST(val, mag=mag))
@@ -862,10 +863,10 @@ class Filter_layout():
         self.button_filter_in = self.pb_button_filter_in()
         self.button_filter_out = self.pb_button_filter_out()
         self.label_filter = self.lb_label_filter()
-        
+
     def init_connect_function(self):
         self.obj.pb_filter_in.clicked.connect(lambda: self.fun_click_filter('In'))
-         
+
     def lb_label_filter(self):
         self.obj.lb_filter = FixObj(QLabel, self.font2, self.motor_label, 120, 40).run()
         return self.obj.lb_filter
@@ -888,7 +889,7 @@ class Filter_layout():
             caput(pv, 0)
             #RE(mv(self.mot, 0))
         current_status = self.mot.value
-        self.fun_update_status(current_status) # excluded from global sync 
+        self.fun_update_status(current_status) # excluded from global sync
 
     def fun_update_status(self, current_status):
         #current_status = self.mot.value
@@ -898,7 +899,7 @@ class Filter_layout():
         else:
             self.button_filter_in.setStyleSheet('color: rgb(50, 50, 50);')
             self.button_filter_out.setStyleSheet('color: rgb(200, 50, 50);')
-            
+
     def layout(self):
         lb_empty = QLabel()
         hbox = QHBoxLayout()
@@ -934,8 +935,11 @@ class FixObj():
 class App(QWidget):
     def __init__(self):
         super().__init__()
+        self.terminal = None
         self.title = 'TXM Control'
-        screen_resolution = QApplication.desktop().screenGeometry()
+        app = QApplication.instance()
+        screen, *rest = app.screens()
+        screen_resolution = screen.geometry()
         width, height = screen_resolution.width(), screen_resolution.height()
         self.width = 1020
         self.height = 800
@@ -946,7 +950,7 @@ class App(QWidget):
         stdout = OutputWrapper(self, True)
         stdout.outputWritten.connect(self.handleOutput)
         stderr = OutputWrapper(self, False)
-        stderr.outputWritten.connect(self.handleOutput) 
+        stderr.outputWritten.connect(self.handleOutput)
 
         self.initUI()
         self.global_sync()
@@ -954,10 +958,13 @@ class App(QWidget):
         self.display_calib_eng_only()
         self.enable_reset_reading()
 
+
     def handleOutput(self, text, stdout):
-        color = self.terminal.textColor()
+        if self.terminal is None:
+            return
+        # color = self.terminal.textColor()
         self.terminal.moveCursor(QtGui.QTextCursor.End)
-        #self.terminal.setTextColor(color if stdout else self._err_color)       
+        #self.terminal.setTextColor(color if stdout else self._err_color)
         stylesheet = "background-color: rgb(40, 40, 40)"#rgb(48, 10, 36)"
         self.terminal.setStyleSheet(stylesheet)
         c = QColor(51, 255, 51)
@@ -975,13 +982,13 @@ class App(QWidget):
     def closeEvent(self, *args, **kwargs):
         # self.pos_save()
         super().closeEvent(*args, **kwargs)
-        
+
         print('close window')
-        
+
     def run_at_start(self):
         try:
             self.pos_load_last()
-            print('load previous sample positions')            
+            print('load previous sample positions')
         except Exception as err:
             print(err)
         try:
@@ -1003,7 +1010,7 @@ class App(QWidget):
         self.sample_pos = {}
         self.scan_name = ''
         self.pos_num = 0
-        self.calib_note = 'Before calibration, click "Go to calib" to any existing calib. position first' 
+        self.calib_note = 'Before calibration, click "Go to calib" to any existing calib. position first'
         self.txm_eng_list = {}
         self.txm_scan = {}
         self.txm_record_scan = {}
@@ -1015,9 +1022,9 @@ class App(QWidget):
         self.custom_variable_dict = {}
         self.fn_calib_eng_file = "/nsls2/data/fxi-new/legacy/log/calib_new.csv"
         self.fpath_bluesky_startup = '/nsls2/data/fxi-new/shared/config/bluesky/profile_collection/startup'
-        self.timestamp_cache_for_calib_eng_file = os.stat(self.fn_calib_eng_file)
+        # self.timestamp_cache_for_calib_eng_file = os.stat(self.fn_calib_eng_file)
         grid = QGridLayout()
-  
+
         grid.addWidget(self.layout_motor(), 0, 1)
         #grid.addWidget(self.layout_instruction(), 1, 1)
         grid.addWidget(self.layout_scan(), 2, 1)
@@ -1040,7 +1047,7 @@ class App(QWidget):
         lb_1 = QLabel()
         lb_1.setFont(self.font2)
         lb_1.setText('Type 1 (single scan): choose "scan type" -> '
-                     'input parameters (load and select "Energy list" if needed) ->' 
+                     'input parameters (load and select "Energy list" if needed) ->'
                      '" check scan" -> "Run"')
         lb_2 = QLabel()
         lb_2.setFont(self.font2)
@@ -1057,11 +1064,11 @@ class App(QWidget):
 
     def layout_motor(self):
         lb_empty = FixObj(QLabel, None, '', 30).run()
-        
+
         lb_empty1 = FixObj(QLabel, None, '', 30).run()
-        
+
         lb_empty2 = FixObj(QLabel, None, '', 10).run()
-        
+
         gpbox = QGroupBox('Sample position')
         gpbox.setFont(self.font1)
         #gpbox.setStyleSheet('color: rgb(0, 80, 255);')
@@ -1077,7 +1084,7 @@ class App(QWidget):
 
         #hbox_motor.addLayout(self.vbox_beam_shutter())
         hbox_motor.addLayout(self.vbox_shutter_reload())
-        
+
         hbox_motor.setAlignment(QtCore.Qt.AlignLeft)
         hbox_motor.addStretch()
         vbox_motor = QVBoxLayout()
@@ -1123,7 +1130,7 @@ class App(QWidget):
         hbox.addWidget(self.pb_reset_rot_speed)
         hbox.addStretch()
         hbox.setAlignment(QtCore.Qt.AlignLeft)
-        
+
         vbox_motor_pos = QVBoxLayout()
         vbox_motor_pos.addWidget(lb_title)
 
@@ -1131,7 +1138,7 @@ class App(QWidget):
         vbox_motor_pos.addLayout(hbox)
         vbox_motor_pos.setAlignment(QtCore.Qt.AlignTop)
         return vbox_motor_pos
- 
+
     def vbox_pos_select_for_scan(self):
         lb_pos = FixObj(QLabel, self.font1, 'Position used in scan', 200).run()
         lb_pos.setStyleSheet('color: rgb(0, 80, 255)')
@@ -1155,7 +1162,7 @@ class App(QWidget):
 
         hbox = QHBoxLayout()
         hbox.addWidget(self.lst_scan_pos)
-        hbox.addLayout(vbox_select)        
+        hbox.addLayout(vbox_select)
         hbox.setAlignment(QtCore.Qt.AlignLeft)
 
         vbox = QVBoxLayout()
@@ -1167,12 +1174,12 @@ class App(QWidget):
         vbox.setAlignment(QtCore.Qt.AlignTop)
 
         return vbox
-       
+
     def vbox_pos_list(self):
         sep = FixObj(QLabel, None, '', 170, 5).run()
         sep.setStyleSheet('background-color: rgb(0, 80, 255);')
 
-        lb_pos = FixObj(QLabel, self.font1,'Position saved', 160).run() 
+        lb_pos = FixObj(QLabel, self.font1,'Position saved', 160).run()
 
         lb_pos_x = FixObj(QLabel, self.font2, 'x:', 20).run()
 
@@ -1187,7 +1194,7 @@ class App(QWidget):
         self.lb_pos_z = FixObj(QLabel, self.font2, '', 95).run()
 
         lb_pos_r = FixObj(QLabel, self.font2, 'r:', 20).run()
-        
+
         self.lb_pos_r = FixObj(QLabel, self.font2, '', 95).run()
 
         hbox_pos1 = QHBoxLayout()
@@ -1292,7 +1299,7 @@ class App(QWidget):
         self.motor_display.append(self.shutter)
         vbox = self.shutter.layout()
         return vbox
- 
+
     def vbox_reload(self):
         self.pb_reload = FixObj(QPushButton, self.font1, 'Reload_GUI', 120, 30).run()
         self.pb_reload.clicked.connect(self.reload_gui)
@@ -1440,13 +1447,13 @@ class App(QWidget):
         hbox_ipython2.addWidget(tx_ipython_msg2)
         hbox_ipython2.addStretch()
         hbox_ipython2.setAlignment(QtCore.Qt.AlignLeft)
-    
-        self.ip_widget = make_jupyter_widget_with_kernel()        
+
+        self.ip_widget = make_jupyter_widget_with_kernel()
         self.ip_widget.setFixedWidth(1600)
         self.ip_widget.setFixedHeight(360)
         self.ip_widget.set_default_style('linux')
         self.ip_widget.font = QtGui.QFont(self.ip_widget.font.family(), 12);
-        
+
         vbox2 = QVBoxLayout()
         vbox2.addLayout(hbox_ipython1)
         vbox2.addLayout(hbox_ipython2)
@@ -1487,7 +1494,7 @@ class App(QWidget):
 
         self.pb_pause_scan = FixObj(QPushButton, self.font1, 'Pause', 80, 40).run()
         self.pb_pause_scan.setStyleSheet('color: rgb(200, 200, 200)')
-        self.pb_pause_scan.setEnabled(False)        
+        self.pb_pause_scan.setEnabled(False)
         self.pb_pause_scan.clicked.connect(self.run_pause)
 
         self.pb_resume_scan = FixObj(QPushButton, self.font1, 'Resume', 80, 40).run()
@@ -1620,7 +1627,7 @@ class App(QWidget):
 
         vbox = QVBoxLayout()
         vbox.addWidget(lb_title)
-        vbox.addLayout(hbox)       
+        vbox.addLayout(hbox)
         vbox.setAlignment(QtCore.Qt.AlignTop)
 
         return vbox
@@ -1712,7 +1719,7 @@ class App(QWidget):
     def vbox_record_scan(self):
         lb_title = FixObj(QLabel, self.font1, 'Recorded scan').run()
 
-        self.lst_record_scan = FixObj(QListWidget, self.font2, '', 160, 160).run()   
+        self.lst_record_scan = FixObj(QListWidget, self.font2, '', 160, 160).run()
         self.lst_record_scan.itemClicked.connect(self.show_recorded_scan)
         self.lst_record_scan.setSelectionMode(QAbstractItemView.SingleSelection)
 
@@ -1865,20 +1872,20 @@ class App(QWidget):
             self.scan_lb[f'lb_{i}'] = FixObj(QLabel, self.font2, f'param {i}:', 160).run()
             self.scan_lb[f'lb_{i}'].setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             self.scan_lb[f'lb_{i}'].setVisible(False)
-            
+
             self.scan_tx[f'tx_{i}'] = FixObj(QLineEdit, self.font2, '', 120).run()
             self.scan_tx[f'tx_{i}'].setVisible(False)
 
         self.scan_lb['note'] = FixObj(QLabel, self.font1, 'Sample infor:', 160).run()
         self.scan_lb['note'].setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.scan_lb['note'].setVisible(True)
-        
+
         self.scan_tx['note'] = FixObj(QLineEdit, self.font2, '', 290).run()
         self.scan_tx['note'].setVisible(True)
 
         self.scan_lb['XEng'] = FixObj(QLabel, self.font1, 'X-ray Energy:', 120).run()
         self.scan_lb['XEng'].setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        
+
         self.scan_tx['XEng'] = FixObj(QLineEdit, self.font2, '', 120).run()
         self.scan_tx['XEng'].setValidator(QDoubleValidator())
 
@@ -1992,7 +1999,7 @@ class App(QWidget):
                 self.tx_scan_msg.setPlainText(msg)
             else:
                 self.lb_current_sid.setText(str(sid2))
-            
+
             #self.display_calib_eng_only()
             msg += '\nupdate energy calibration finished.\n'
         except:
@@ -2008,7 +2015,7 @@ class App(QWidget):
         finally:
             print(msg)
             self.tx_scan_msg.setPlainText(msg)
-        msg += 'motor synchronization finshed.'    
+        msg += 'motor synchronization finshed.'
         self.tx_scan_msg.setPlainText(msg)
 
     def reset_r_speed(self):
@@ -2174,7 +2181,7 @@ class App(QWidget):
             self.scan_lb[f'lb_{i}'].setVisible(False)
             self.scan_tx[f'tx_{i}'].setVisible(False)
         self.pb_record.setDisabled(True)
-        
+
         i = 0
         flag_eng_list = 0
         intro = ''
@@ -2260,7 +2267,7 @@ class App(QWidget):
                 else:
                     pos_info = pos
                 self.tx_pos.setText(pos_info)
-            # Now backgound position is automatically added when created    
+            # Now backgound position is automatically added when created
             '''
             elif 'Bkg' in pos:  # background /out position
                 x = self.pos[pos]['x']
@@ -2291,7 +2298,7 @@ class App(QWidget):
         item = self.lst_pos.selectedItems()
         if len(item):
             pos = item[0].text()
-            if not 'Bkg' in pos:  
+            if not 'Bkg' in pos:
                 i = 0
                 flag_exist = False
                 while i < min(self.lst_scan_pos.count(), 99):
@@ -2310,7 +2317,7 @@ class App(QWidget):
         if len(item):
             pos = item[0].text()  # 'e.g., pos_1'
             self.lst_scan_pos.takeItem(self.lst_scan_pos.row(item[0]))
-    
+
     def pos_remove_all_select(self):
         self.lst_scan_pos.clear()
 
@@ -2429,13 +2436,13 @@ class App(QWidget):
         self.txm_scan['XEng'] = eng
         try:
             if set_mag == 0:
-                mag = float(self.tx_set_zp_mag.text())  
-                self.txm_scan['Mag'] = mag  
+                mag = float(self.tx_set_zp_mag.text())
+                self.txm_scan['Mag'] = mag
             else:
-                mag = set_mag  
+                mag = set_mag
         except:
             mag = None
- 
+
         cmd_move_eng = f'RE(move_zp_ccd_TEST({eng}, mag={mag}))\n'
 
         cmd_all += cmd_move_eng + '\n'
@@ -2486,7 +2493,7 @@ class App(QWidget):
         self.txm_eng_list = {}
         self.lst_eng_list.clear()
         with open(self.fn_save_eng_list, 'r') as f:
-            self.txm_eng_list = json.load(f) 
+            self.txm_eng_list = json.load(f)
         n = len(self.txm_eng_list)
         keys = np.sort(list(self.txm_eng_list.keys()))
         for k in keys:
@@ -2501,7 +2508,7 @@ class App(QWidget):
         fn, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "", file_type, options=options)
         if fn:
             try:
-                eng_list = np.array(np.loadtxt(fn))            
+                eng_list = np.array(np.loadtxt(fn))
                 eng_name = self.tx_eng_name.text()
                 available_id = self.get_available_eng_list_id()
                 eng_name = f'E_{available_id:02d}_{eng_name}'
@@ -2593,8 +2600,8 @@ class App(QWidget):
             self.pb_resume_scan.setEnabled(True)
             self.pb_stop_scan.setEnabled(True)
             self.pb_pause_scan.setEnabled(False)
-            QApplication.processEvents()   
-            RE.request_pause()         
+            QApplication.processEvents()
+            RE.request_pause()
         except Exception as err:
             msg += str(err) + '\n'
             print(msg)
@@ -2604,7 +2611,7 @@ class App(QWidget):
         try:
             msg = ''
             self.pb_resume_scan.setStyleSheet('color: rgb(200, 200, 200);')
-            self.pb_pause_scan.setStyleSheet('color: rgb(200, 50, 50);')     
+            self.pb_pause_scan.setStyleSheet('color: rgb(200, 50, 50);')
             self.pb_stop_scan.setStyleSheet('color: rgb(200, 200, 200);')
             self.pb_abort_scan.setStyleSheet('color: rgb(200, 200, 200);')
             self.pb_resume_scan.setEnabled(False)
@@ -2612,8 +2619,8 @@ class App(QWidget):
             self.pb_stop_scan.setEnabled(False)
             self.pb_abort_scan.setEnabled(False)
             self.tx_scan_msg.setPlainText('Scan resumed ...')
-            QApplication.processEvents()             
-            RE.resume()            
+            QApplication.processEvents()
+            RE.resume()
         except Exception as err:
             msg = str(err) + '\n'
             print(msg)
@@ -2623,7 +2630,7 @@ class App(QWidget):
         try:
             msg = ''
             self.pb_resume_scan.setStyleSheet('color: rgb(200, 200, 200);')
-            self.pb_pause_scan.setStyleSheet('color: rgb(200, 200, 200);')     
+            self.pb_pause_scan.setStyleSheet('color: rgb(200, 200, 200);')
             self.pb_stop_scan.setStyleSheet('color: rgb(200, 200, 200);')
             self.pb_abort_scan.setStyleSheet('color: rgb(200, 200, 200);')
             self.pb_resume_scan.setEnabled(False)
@@ -2631,7 +2638,7 @@ class App(QWidget):
             self.pb_stop_scan.setEnabled(False)
             self.pb_abort_scan.setEnabled(False)
             self.tx_scan_msg.setPlainText('Scan Stopped ...')
-            QApplication.processEvents()   
+            QApplication.processEvents()
             RE.stop()
         except Exception as err:
             msg += str(err) + '\n'
@@ -2642,7 +2649,7 @@ class App(QWidget):
         try:
             msg = ''
             self.pb_resume_scan.setStyleSheet('color: rgb(200, 200, 200);')
-            self.pb_pause_scan.setStyleSheet('color: rgb(200, 200, 200);')     
+            self.pb_pause_scan.setStyleSheet('color: rgb(200, 200, 200);')
             self.pb_stop_scan.setStyleSheet('color: rgb(200, 200, 200);')
             self.pb_abort_scan.setStyleSheet('color: rgb(200, 200, 200);')
             self.pb_resume_scan.setEnabled(False)
@@ -2650,7 +2657,7 @@ class App(QWidget):
             self.pb_stop_scan.setEnabled(False)
             self.pb_abort_scan.setEnabled(False)
             self.tx_scan_msg.setPlainText('Scan Aborted ...')
-            QApplication.processEvents()   
+            QApplication.processEvents()
             RE.abort()
         except Exception as err:
             msg += str(err) + '\n'
@@ -2690,7 +2697,7 @@ class App(QWidget):
                 msg += str(err) + '\n'
                 print(msg)
             self.tx_scan_msg.setPlainText(msg)
-            
+
             txt = self.terminal.toPlainText()
             lines = txt.split('\n')
             idx = 1
@@ -2725,40 +2732,40 @@ class App(QWidget):
                 print(msg)
                 get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
                 tmp_scan_list = fxi_load_scan_list_common()
-                
+
             if scan_type == 2: # other scans, e.g., for beamline alignment
                 fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_pzt.py'
                 msg = f'load other scan in: 43-scans_pzt.py and 44-scans_other.py'
                 #msg = f'load other scan in: 44-scans_other.py'
                 get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
                 tmp_scan_list1 = fxi_load_scan_list_pzt()
-                
+
                 fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_other.py'
                 get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
                 tmp_scan_list2 = fxi_load_scan_list_other()
                 tmp_scan_list = merge_dict(tmp_scan_list1, tmp_scan_list2)
                 #tmp_scan_list = fxi_load_scan_list_other()
-            
-            if scan_type == 3: # customized scans, e.g., temporary created 
+
+            if scan_type == 3: # customized scans, e.g., temporary created
                 fpath_scan_list = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_user.py'
                 msg = f'load user scan in: 98-user_scan.py'
                 get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
                 tmp_scan_list = fxi_load_scan_list_user()
-            
+
             if scan_type == 4:
                 get_ipython().run_line_magic("run", f"-i {fpath_scan_list}")
                 source = open(fpath_scan_list).read()
                 fun_name = [f.name for f in ast.parse(source).body if isinstance(f, ast.FunctionDef)]
-                tmp_scan_list = eval(fun_name[0] + '()')   
+                tmp_scan_list = eval(fun_name[0] + '()')
                 msg = f'load custom scan in: {fpath_scan_list}'
                 self.temporary_py_file = fpath_scan_list
                 self.temporary_py_scan_list = tmp_scan_list
             if scan_type == 5:
                 if len(self.temporary_py_file):
                     tmp_scan_list = self.temporary_py_scan_list
-            scan_list = merge_dict(scan_list, tmp_scan_list)            
+            scan_list = merge_dict(scan_list, tmp_scan_list)
             self.lst_scan.clear()
-            #QApplication.processEvents() 
+            #QApplication.processEvents()
             for k in tmp_scan_list.keys():
                 name = ' '.join(t for t in k.split('_')[1:])
                 self.lst_scan.addItem(name)
@@ -2768,28 +2775,28 @@ class App(QWidget):
             print(msg)
             self.tx_scan_msg.setPlainText(msg)
 
-    def update_scan_type_list(self, scan_type=1):     
+    def update_scan_type_list(self, scan_type=1):
         if scan_type == 1: # update common scan
             fname_read = self.fpath_bluesky_startup + '/41-scans.py'
             fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_common.py'
-            prepare_scan_list(fname_read, fname_write) 
+            prepare_scan_list(fname_read, fname_write)
             get_ipython().run_line_magic("run", f"-i {fname_read}")
 
             self.load_scan_type_list(1)
         if scan_type == 2: # update other+pzt scan
             #fname_read = self.fpath_bluesky_startup + '/43-scans_pzt.py'
             #fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_pzt.py'
-            #prepare_scan_list(fname_read, fname_write)  
+            #prepare_scan_list(fname_read, fname_write)
 
             fname_read = self.fpath_bluesky_startup + '/44-scans_other.py'
             fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_other.py'
-            prepare_scan_list(fname_read, fname_write)  
+            prepare_scan_list(fname_read, fname_write)
             get_ipython().run_line_magic("run", f"-i {fname_read}")
             self.load_scan_type_list(2)
         if scan_type == 3: # update user scan
             fname_read = self.fpath_bluesky_startup + '/98-user_scan.py'
             fname_write = '/nsls2/data/fxi-new/shared/software/fxi_control/scan_list_user.py'
-            prepare_scan_list(fname_read, fname_write)  
+            prepare_scan_list(fname_read, fname_write)
             get_ipython().run_line_magic("run", f"-i {fname_read}")
             self.load_scan_type_list(3)
 
@@ -2802,10 +2809,10 @@ class App(QWidget):
                 fname_read = fn
                 get_ipython().run_line_magic("run", f"-i {fname_read}")
                 fname_write = 'custom_converted_scan_list.py'
-                prepare_scan_list(fname_read, fname_write) 
+                prepare_scan_list(fname_read, fname_write)
                 get_ipython().run_line_magic("run", f"-i {fname_read}")
                 self.load_scan_type_list(4, fname_write)
-      
+
     def record_scan(self):
         # need to 'check scan' first
         n = self.lst_record_scan.count()
@@ -2817,7 +2824,7 @@ class App(QWidget):
         self.txm_record_scan[record_scan_name] = self.txm_scan.copy()
         self.lst_record_scan.addItem(record_scan_name)
         self.pb_record.setDisabled(True)
-        
+
 
 
     def show_recorded_scan(self):
@@ -3056,17 +3063,17 @@ class App(QWidget):
         hbox = QHBoxLayout()
         hbox.addLayout(hbox_record)
         hbox.addWidget(lb_empty1)
-        #hbox.addLayout(hbox_optics) 
-        hbox.addWidget(lb_empty2)        
-        hbox.addLayout(self.vbox_zp_ccd())  
-        hbox.addWidget(lb_empty3)            
-        hbox.addLayout(self.vbox_filter()) 
+        #hbox.addLayout(hbox_optics)
+        hbox.addWidget(lb_empty2)
+        hbox.addLayout(self.vbox_zp_ccd())
+        hbox.addWidget(lb_empty3)
+        hbox.addLayout(self.vbox_filter())
         hbox.addStretch()
         hbox.setAlignment(QtCore.Qt.AlignTop)
-        
+
         self.chk_reset_reading = QCheckBox('Enable reading reset without moving motor (ADVANCED USER ONLY)')
         self.chk_reset_reading.stateChanged.connect(self.enable_reset_reading)
-        self.chk_reset_reading.setChecked(False) 
+        self.chk_reset_reading.setChecked(False)
 
         vbox = QVBoxLayout()
         vbox.addLayout(hbox)
@@ -3126,10 +3133,10 @@ class App(QWidget):
         lb_sep3 = QLabel()
         lb_sep3.setFixedHeight(10)
         lb_sep3.setFixedWidth(100)
-        
-        #self.mot_txmX = Motor_layout(self, 'zps.pi_x', 'TXM X', 'mm')       
+
+        #self.mot_txmX = Motor_layout(self, 'zps.pi_x', 'TXM X', 'mm')
         #self.motor_display.append(self.mot_txmX)
-        
+
         vbox = QVBoxLayout()
         #vbox.addLayout(self.mot_txmX.layout())
         vbox.addWidget(lb_sep1)
@@ -3193,7 +3200,7 @@ class App(QWidget):
 
         self.pb_zp_cal = FixObj(QPushButton, self.font2, 'Calculate', 230).run()
         self.pb_zp_cal.clicked.connect(self.cal_zone_plate_param)
-        
+
         hbox_dia = QHBoxLayout()
         hbox_dia.addWidget(lb_zp_diameter)
         hbox_dia.addWidget(self.tx_zp_diamter)
@@ -3211,7 +3218,7 @@ class App(QWidget):
         hbox_mag.addWidget(self.tx_txm_mag)
         hbox_mag.addWidget(lb_txm_mag_unit)
         hbox_mag.setAlignment(QtCore.Qt.AlignLeft)
-        
+
         hbox_vlm_mag = QHBoxLayout()
         hbox_vlm_mag.addWidget(lb_vlm_mag)
         hbox_vlm_mag.addWidget(self.tx_vlm_mag)
@@ -3296,7 +3303,7 @@ class App(QWidget):
         hbox_dof.addWidget(self.tx_zp_dof)
         hbox_dof.addWidget(lb_zp_dof_unit)
         hbox_dof.setAlignment(QtCore.Qt.AlignLeft)
-        
+
         hbox_zp_dis = QHBoxLayout()
         hbox_zp_dis.addWidget(lb_zp_dis)
         hbox_zp_dis.addWidget(self.tx_zp_dis)
@@ -3319,7 +3326,7 @@ class App(QWidget):
         vbox_zp.setAlignment(QtCore.Qt.AlignTop)
 
         return vbox_zp
-    
+
     def vbox_filter(self):
         lb_empty = QLabel()
         lb_title = FixObj(QLabel, self.font1, 'SSA Filters').run()
@@ -3330,7 +3337,7 @@ class App(QWidget):
         self.filt2 = Filter_layout(self, 'filter2', 'Filter 2 (1-Al)')
         self.filt3 = Filter_layout(self, 'filter3', 'Filter 3 (2-Al)')
         self.filt4 = Filter_layout(self, 'filter4', 'Filter 4 (3-Al)')
-        
+
         self.motor_display.append(self.filt1)
         self.motor_display.append(self.filt2)
         self.motor_display.append(self.filt3)
@@ -3358,7 +3365,7 @@ class App(QWidget):
 
         lb_empty3 = QLabel()
         lb_empty3.setFixedWidth(5)
-        
+
         lb_empty4 = QLabel()
         lb_empty4.setFixedWidth(5)
 
@@ -3402,7 +3409,7 @@ class App(QWidget):
 
         self.lst_eng_calib = FixObj(QListWidget, self.font2, '', 140, 160).run()
         self.lst_eng_calib.itemClicked.connect(self.display_calib_eng_detail)
-        
+
         vbox_recorded = QVBoxLayout()
         vbox_recorded.addWidget(lb_rec_eng_recorded)
         vbox_recorded.addWidget(self.lst_eng_calib)
@@ -3421,13 +3428,13 @@ class App(QWidget):
         '''
         lb_zp_mag = FixObj(QLabel, self.font2, 'ZP Mag:', 80).run()
         self.lb_zp_mag = FixObj(QLabel, self.font2, '', 80).run()
-        
+
         lb_current_mag = FixObj(QLabel, self.font2, 'TXM Mag:', 80).run()
         self.lb_current_mag = FixObj(QLabel, self.font2, '', 80).run()
 
         lb_pix_size = FixObj(QLabel, self.font2, 'Pixel:', 80).run()
         self.lb_pix_size = FixObj(QLabel, self.font2, '', 80).run()
-        
+
         hbox_zp_mag = QHBoxLayout()
         hbox_zp_mag.addWidget(lb_zp_mag)
         hbox_zp_mag.addWidget(self.lb_zp_mag)
@@ -3437,12 +3444,12 @@ class App(QWidget):
         hbox_txm_mag.addWidget(lb_current_mag)
         hbox_txm_mag.addWidget(self.lb_current_mag)
         hbox_txm_mag.setAlignment(QtCore.Qt.AlignTop)
-        
+
         hbox_txm_pix = QHBoxLayout()
         hbox_txm_pix.addWidget(lb_pix_size)
         hbox_txm_pix.addWidget(self.lb_pix_size)
         hbox_txm_pix.setAlignment(QtCore.Qt.AlignTop)
-        
+
         vbox_pix_mag = QVBoxLayout()
         vbox_pix_mag.addLayout(hbox_zp_mag)
         vbox_pix_mag.addWidget(lb_sep1)
@@ -3455,7 +3462,7 @@ class App(QWidget):
         self.motor_display.append(self.txm_zp_pix)
         vbox_pix_mag = self.txm_zp_pix.layout()
 
-        self.calib_note = 'Before calibration, click "Go to calib" to any existing calib. position first' 
+        self.calib_note = 'Before calibration, click "Go to calib" to any existing calib. position first'
         self.lb_calib_note = FixObj(QLabel, self.font2, self.calib_note, 500).run()
         self.lb_calib_note.setStyleSheet('color: rgb(0, 80, 255);')
 
@@ -3507,8 +3514,8 @@ class App(QWidget):
         self.motor_display.append(self.mot_cond_pit)
 
         return vbox
-  
-    def vbox_motor_aper(self):                
+
+    def vbox_motor_aper(self):
         self.mot_aper_x = Motor_layout(self, 'aper.x', 'Aper.x', 'um')
         self.mot_aper_y = Motor_layout(self, 'aper.y', 'Aper.y', 'um')
         self.mot_aper_z = Motor_layout(self, 'aper.z', 'Aper.z', 'mm')
@@ -3564,7 +3571,7 @@ class App(QWidget):
         self.motor_display.append(self.mot_dcm_th2_pzt)
         vbox = QVBoxLayout()
         vbox.addLayout(self.mot_dcm_th2.layout())
-        vbox.addLayout(self.mot_dcm_th2_pzt.layout()) 
+        vbox.addLayout(self.mot_dcm_th2_pzt.layout())
         vbox.addStretch()
         vbox.setAlignment(QtCore.Qt.AlignLeft)
         return vbox
@@ -3576,11 +3583,11 @@ class App(QWidget):
         self.motor_display.append(self.mot_dcm_chi2_pzt)
         vbox = QVBoxLayout()
         vbox.addLayout(self.mot_dcm_chi2.layout())
-        vbox.addLayout(self.mot_dcm_chi2_pzt.layout()) 
+        vbox.addLayout(self.mot_dcm_chi2_pzt.layout())
         vbox.addStretch()
         vbox.setAlignment(QtCore.Qt.AlignLeft)
         return vbox
-    
+
 
     ################ Tab 3  ###################
     def vbox_other_func(self):
@@ -3588,7 +3595,7 @@ class App(QWidget):
         lb_empty2 = QLabel()
         hbox = QHBoxLayout()
         hbox.addLayout(self.vbox_load_external_py_file())
-        #hbox.addLayout(self.vbox_global_var())        
+        #hbox.addLayout(self.vbox_global_var())
         hbox.addWidget(lb_empty1)
         hbox.setAlignment(QtCore.Qt.AlignLeft)
         hbox.addStretch()
@@ -3638,27 +3645,27 @@ class App(QWidget):
         hbox.addStretch()
 
         vbox = QVBoxLayout()
-        vbox.addLayout(hbox)        
-        vbox.addLayout(self.hbox_global_var_button()) 
+        vbox.addLayout(hbox)
+        vbox.addLayout(self.hbox_global_var_button())
         vbox.addWidget(lb_empty)
         vbox.setAlignment(QtCore.Qt.AlignTop)
         vbox.addStretch()
         return vbox
 
     def vbox_global_var_msg(self):
-        lb_empty2 = QLabel()        
+        lb_empty2 = QLabel()
         lb_msg = FixObj(QLabel, self.font1, 'Python input', 120, 27).run()
 
         self.tx_var_file_msg = FixObj(QPlainTextEdit, self.font2, '', 250, 150).run()
 
         vbox = QVBoxLayout()
         vbox.addWidget(lb_msg)
-        vbox.addWidget(self.tx_var_file_msg) 
+        vbox.addWidget(self.tx_var_file_msg)
         vbox.setAlignment(QtCore.Qt.AlignTop)
         vbox.addStretch()
         return vbox
 
-    def hbox_global_var_button(self): 
+    def hbox_global_var_button(self):
         lb_empty = QLabel()
         lb_sep = FixObj(QLabel, self.font2, '', 0, 10).run()
         self.lb_var_msg = FixObj(QLabel, self.font2, 'Msg: ', 400).run()
@@ -3677,9 +3684,9 @@ class App(QWidget):
 
         hbox_button = QHBoxLayout()
         hbox_button.addWidget(self.pb_var_file)
-        hbox_button.addWidget(self.pb_var_save)        
+        hbox_button.addWidget(self.pb_var_save)
         hbox_button.addWidget(self.pb_var_load)
-        hbox_button.addWidget(self.pb_var_clear)    
+        hbox_button.addWidget(self.pb_var_clear)
         hbox_button.addWidget(lb_sep)
         hbox_button.addWidget(self.lb_var_msg)
         hbox_button.addWidget(lb_empty)
@@ -3713,7 +3720,7 @@ class App(QWidget):
     '''
     def vbox_global_var_value_editor(self):
         self.tx_saved_var_value = FixObj(QPlainTextEdit, self.font2, '', 350, 150).run()
-        
+
         lb_value_list = FixObj(QLabel, self.font1, 'Value', 70, 27).run()
         vbox = QVBoxLayout()
         vbox.addWidget(lb_value_list)
@@ -3773,7 +3780,7 @@ class App(QWidget):
                 print(msg)
             finally:
                 self.lb_var_msg.setText('Msg: ' + msg)
-                   
+
     def define_global_var(self):
         cmd = self.tx_var_file_msg.toPlainText()
         msg = ''
@@ -3799,8 +3806,8 @@ class App(QWidget):
                 msg = f'File loaded: .../{fn_short}'
             except:
                 msg = f'fails to load .../{fn_short}'
-            finally: 
-                print(msg)  
+            finally:
+                print(msg)
                 self.lb_var_msg.setText('Msg: ' + msg)
             '''
 
@@ -3835,7 +3842,7 @@ class App(QWidget):
         if key_type == 'variable':
             cmd0 = cmd0.lstrip()
             cmd0 = f'command:\n{key} = {cmd0}\n'
-            cmd += f'value:\n{key} = {value}' 
+            cmd += f'value:\n{key} = {value}'
         text = cmd0 + cmd
         self.tx_saved_var_value.setPlainText(text)
 
@@ -3845,12 +3852,12 @@ class App(QWidget):
         file_type = 'python files (*.py)'
         fn, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "", file_type, options=options)
         if fn:
-            fname_read = fn   
-            try: 
+            fname_read = fn
+            try:
                 get_ipython().run_line_magic("run", f"-i {fn}")
-                msg = f'Loaded successful: {fn}\n'     
+                msg = f'Loaded successful: {fn}\n'
             except:
-                msg = f'FAILS TO LOAD FILE: {fn}\n'           
+                msg = f'FAILS TO LOAD FILE: {fn}\n'
             self.msg_external_file += msg
             self.tx_ext_file_msg.setPlainText(self.msg_external_file)
 
@@ -3865,7 +3872,7 @@ class App(QWidget):
                         mot.step_unit.setVisible(False)
                         mot.button_reset_reading.setVisible(True)
                         mot.editor_reset_reading.setVisible(True)
-                        
+
                     mot.button_reset_reading.setEnabled(True)
                     mot.editor_reset_reading.setEnabled(True)
                     # specially for XEng
@@ -3882,7 +3889,7 @@ class App(QWidget):
                         mot.editor_step_size.setVisible(True)
                         mot.button_step_plus.setVisible(True)
                         mot.step_unit.setVisible(True)
-                    # specially for XEng                   
+                    # specially for XEng
                     self.mot_sample_e.cbox_dcm_only.setVisible(False)
                     self.mot_sample_e.cbox_dcm_only.setChecked(False)
                     self.mot_sample_e.label_eng_calib.setVisible(True)
@@ -3892,11 +3899,11 @@ class App(QWidget):
         else:
             self.tx_set_zp_mag.setEnabled(False)
 
-      
+
     def record_eng_calib(self):
         global CALIBER
         try:
-            calib_mag = float(self.selected_calib_energy['Mag'])/10. 
+            calib_mag = float(self.selected_calib_energy['Mag'])/10.
         except:
             calib_mag = float(self.tx_set_zp_mag.text())
         try:
@@ -3909,7 +3916,7 @@ class App(QWidget):
                 print(f'current mag = {current_mag}')
                 print(f'calib mag = {calib_mag}')
                 print(f'\n{txt}\n')
-                QApplication.processEvents()  
+                QApplication.processEvents()
                 return None
                 '''
                 record_calib_pos_new(eng_id, record_th2_only=True)
@@ -3917,7 +3924,7 @@ class App(QWidget):
                 record_calib_pos_new(eng_id)
             self.display_calib_eng_only()
             self.lb_calib_note.setText(self.calib_note)
-            QApplication.processEvents()  
+            QApplication.processEvents()
         except Exception as err:
             print(err)
 
@@ -3988,7 +3995,7 @@ class App(QWidget):
             calib_eng = calib_eng_list[i]
             txt = f'{eng_id:02d}__{calib_eng:2.5f} keV'
             self.lst_eng_calib.addItem(txt)
-            
+
         # update label information
         self.lst_eng_calib.sortItems()
         eng_list_sort = np.sort(calib_eng_list)
@@ -3999,14 +4006,14 @@ class App(QWidget):
         #self.lb_note.setText(eng_lb)
         self.mot_sample_e.label_eng_calib.setText(eng_lb)
 
-        
+
         '''
         self.lb_current_mag.setText(f'{GLOBAL_MAG:3.2f}')
         self.lb_zp_mag.setText(f'{GLOBAL_MAG/GLOBAL_VLM_MAG:3.2f}')
         self.lb_pix_size.setText(f'{6500./GLOBAL_MAG:2.2f} nm')
         '''
         #self.lb_pixel_size.setText(f'{6500./GLOBAL_MAG:2.2f} nm')
-        
+
 
     def display_calib_eng_detail(self):
         item = self.lst_eng_calib.selectedItems()
@@ -4033,20 +4040,20 @@ class App(QWidget):
         self.selected_calib_energy['XEng'] = CALIBER[f'XEng_{eng_id_tx}']
         self.selected_calib_energy['Mag'] = calib_mag
         self.selected_calib_energy['id'] = eng_id_tx
-        
+
 
     def go_to_eng_calib(self):
         sel_eng = self.selected_calib_energy['XEng']
-        sel_mag = self.selected_calib_energy['Mag'] 
+        sel_mag = self.selected_calib_energy['Mag']
         sel_id = self.selected_calib_energy['id']
         print(f'Move to calibration {sel_id}:\nXEng = {sel_eng}\nmagnification = {sel_mag}\n\n')
-        
+
         RE(move_zp_ccd_TEST(sel_eng, sel_mag))
         cur_mag = float(self.lb_zp_mag.text())
         cur_mag = np.round(cur_mag, 2)
         self.tx_set_zp_mag.setText(str(cur_mag))
         self.lb_calib_note.setText(self.calib_note)
-        QApplication.processEvents()    
+        QApplication.processEvents()
 
 
 
@@ -4109,7 +4116,7 @@ class App(QWidget):
                 else:
                     val = 'No value available'
                     self.lb_op_7.setText(val)
-            QApplication.processEvents()         
+            QApplication.processEvents()
         except Exception as err:
             print(err)
 
@@ -4152,14 +4159,14 @@ def prepare_scan_list(fname_read, fname_write='scan_list_test.py'):
     func_name = f'fxi_load_{fname_write_short.split(".")[0]}'
     file_lines.append(f'def {func_name}():')
     file_lines.append(space4 + 'scan_list = {}')
-    
+
     for i in range(len(fun_scan)):
         fun_name = fun_scan[i]
         fun_lines = convert_fun_dict(fun_name)
         for j in range(len(fun_lines)):
             file_lines.append(fun_lines[j])
         file_lines.append('\n')
-    
+
     for i in range(len(fun_scan)):
         fun_name = fun_scan[i]
         file_lines.append(space4 + f'scan_list["txm_{fun_name}"] = txm_{fun_name}')
@@ -4170,7 +4177,7 @@ def prepare_scan_list(fname_read, fname_write='scan_list_test.py'):
     file_lines = convert_initial_digit_to_string(file_lines)
     with open(fname_write, 'w') as f:
         f.write(f'\n'.join(file_lines))
-    
+
 
 def convert_fun_dict(fun_name):
     #single_fun = inspect.getfullargspec(eval(fun_name))
@@ -4181,7 +4188,7 @@ def convert_fun_dict(fun_name):
     '''
     lines = []
     space4 = ' '*4
-    
+
     lines.append(space4 + 'txm_' + fun_name + ' = {')
 
     for k, v in signature.parameters.items():
@@ -4195,7 +4202,7 @@ def convert_fun_dict(fun_name):
         else:
             val = v.default
         l = f"'{k}': {str(val)}, "
-        lines.append(space4 * 2 + l)     
+        lines.append(space4 * 2 + l)
     lines.append(space4 * 2 + "'introduction': ''' Description:\n '''")
     lines.append(space4 + '}')
     return lines
@@ -4247,7 +4254,7 @@ def convert_epics_to_string(file_lines):
             if 'name' in ll:
                 break
         arg_val = ll.split('=')[-1]
-        lines_copy[i] = arg_name + ': ' + arg_val + ','  
+        lines_copy[i] = arg_name + ': ' + arg_val + ','
     return lines_copy
 
 def extract_variable(file_name):
@@ -4258,7 +4265,7 @@ def extract_variable(file_name):
        lines = f.readlines()
     arg_name = []
     arg_command = []
-    arg_value = []    
+    arg_value = []
     get_ipython().run_line_magic("run", f"-i {file_name}")
     for i, l in enumerate(lines):
         if len(l)-len(l.lstrip()) > 0: # there are leading spaces
@@ -4268,7 +4275,7 @@ def extract_variable(file_name):
             try:
                 #val = eval(t[1])
                 arg_name.append(t[0])
-                val = eval(arg_name[-1])                
+                val = eval(arg_name[-1])
                 arg_command.append(t[1].replace('\n', ''))
                 arg_value.append(val)
             except:
@@ -4286,15 +4293,15 @@ def extract_variable(file_name):
 
 def extract_function(fname, key='def'):
     with open(fname, 'r') as f:
-        lines = f.readlines()        
+        lines = f.readlines()
     n = len(lines)
     n_fun = 0
     dict_fun = {}
     txt_fun_name = []
-    line_fun = []    
-    len_key = len(key)   
-    find_fun = False 
-    for i in range(n-1):        
+    line_fun = []
+    len_key = len(key)
+    find_fun = False
+    for i in range(n-1):
         l = lines[i]
         l_next = lines[i+1]
         if l[:len_key+1] == key + ' ':
@@ -4302,7 +4309,7 @@ def extract_function(fname, key='def'):
             txt_fun_name.append(l[len_key:].split('(')[0].lstrip())
         if find_fun:
             line_fun.append(l)
-            if l_next[0] != ' ':                
+            if l_next[0] != ' ':
                 dict_fun[txt_fun_name[-1]] = line_fun
                 line_fun = []
                 n_fun = n_fun + 1
@@ -4311,7 +4318,7 @@ def extract_function(fname, key='def'):
         if l_next[0] == ' ':
             line_fun.append(l_next)
         dict_fun[txt_fun_name[-1]] = line_fun
-        n_fun += 1 
+        n_fun += 1
 
     dict = {}
     for k in dict_fun.keys():
@@ -4324,7 +4331,9 @@ def extract_function(fname, key='def'):
 
 def run_main():
     global txm
-    app = QApplication(sys.argv)
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
     txm = App()
     txm.show()
     sys.exit(app.exec_())
