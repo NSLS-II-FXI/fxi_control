@@ -5,6 +5,10 @@ import os
 import threading
 import time
 import json
+from tiled.client import from_profile, from_uri
+from tiled.queries import Key
+
+
 
 from qtpy import QtGui, QtCore
 from qtpy.QtCore import QThread, QObject, Signal as pyqtSignal, Slot as pyqtSlot, QProcess
@@ -34,6 +38,11 @@ from scan_list_user import fxi_load_scan_list_user
 from scan_list_pzt import fxi_load_scan_list_pzt
 
 #get_ipython().run_line_magic("run", "-i /nsls2/data/fxi-new/shared/software/fxi_control/scan_list.py")
+
+CATALOG_NAME = "fxi"
+tiled_client = from_uri("https://tiled.nsls2.bnl.gov")[CATALOG_NAME]
+tiled_client_fxi = tiled_client["raw"]
+
 
 global txm, CALIBER, scan_list
 scan_list = {}
@@ -2274,7 +2283,7 @@ class App(QWidget):
                 y = self.pos[pos]['y']
                 z = self.pos[pos]['z']
                 r = self.pos[pos]['r']
-                for i in range(20):
+                for i in range(25):
                     txt = self.scan_lb[f'lb_{i}'].text()
                     if 'out_x' in txt:
                         self.scan_tx[f'tx_{i}'].setText(str(x))
@@ -2360,7 +2369,7 @@ class App(QWidget):
             cmd = ''
             cmd_eng_list = ''
             eng_list_error = 0
-            for i in range(20):
+            for i in range(25):
                 if self.scan_lb[f'lb_{i}'].isVisible():
                     param = self.scan_lb[f'lb_{i}'].text()[:-1]
                     val = self.scan_tx[f'tx_{i}'].text()
@@ -2529,7 +2538,7 @@ class App(QWidget):
         if len(item):
             eng_name = item[0].text()
             eng_val = self.txm_eng_list[eng_name]
-            for i in range(20):
+            for i in range(25):
                 if 'eng_list' in self.scan_lb[f'lb_{i}'].text():
                     break
             self.scan_tx[f'tx_{i}'].setText(eng_name)
@@ -2835,7 +2844,7 @@ class App(QWidget):
         self.show_scan_example_sub(scan_list[f'txm_{scan_name}'])  # default view first
         self.txm_scan = self.txm_record_scan[record_scan_name].copy()
         mag = self.txm_scan['Mag']
-        for i in range(20):
+        for i in range(25):
             if self.scan_lb[f'lb_{i}'].isVisible():
                 param = self.scan_lb[f'lb_{i}'].text()[:-1]  # remove ":" at end of string
                 if 'eng_list' in param:
@@ -4195,12 +4204,28 @@ def convert_fun_dict(fun_name):
         if k == 'md' or k == 'note':# or k == 'binning':
             continue
         if v.default is inspect.Parameter.empty:
-            if 'detectors' in k or 'eng_list' in k or 'filter' in k:
+            if 'detector' in k or 'eng_list' in k or 'filter' in k:
                 val = '[]'
             else:
                 val = 'None'
         else:
-            val = v.default
+            if 'detector' in k: # including 'detectors'
+                val = '['
+              
+                for det in v.default:
+                    if 'kinetix' in det.name.lower():
+                        val = val + 'KinetixU, '
+                    elif 'deta1' in det.name.lower():
+                        val = val + 'detA1, '
+                    elif 'mako' in det.name.lower():
+                        val = val + 'mako, '
+                    else:
+                        val = val + det.name + ', '
+
+                val = val.rstrip(' ').rstrip(',') + ']'
+                val = f'"{val}"'
+            else:
+                val = v.default
         l = f"'{k}': {str(val)}, "
         lines.append(space4 * 2 + l)
     lines.append(space4 * 2 + "'introduction': ''' Description:\n '''")

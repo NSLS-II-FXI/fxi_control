@@ -20,7 +20,7 @@ def fxi_load_scan_list_common():
         'start': None, 
         'stop': None, 
         'num': 1, 
-        'detectors': [], 
+        'detectors': "[]", 
         'delay_time': 1, 
         'introduction': ''' Description:
  '''
@@ -48,6 +48,7 @@ def fxi_load_scan_list_common():
         'take_bkg_img': True, 
         'take_dark_img': True, 
         'close_shutter_finish': True, 
+        'detectors': "[KinetixU]", 
         'introduction': ''' Description:
  '''
     }
