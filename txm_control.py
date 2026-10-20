@@ -4204,12 +4204,18 @@ def convert_fun_dict(fun_name):
         if k == 'md' or k == 'note':# or k == 'binning':
             continue
         if v.default is inspect.Parameter.empty:
-            if 'detector' in k or 'eng_list' in k or 'filter' in k:
+            if 'eng_list' in k or 'filter' in k:
                 val = '[]'
+            elif 'detector' in k:
+                val = '[None]'
             else:
-                val = 'None'
+                val ='None'
+        else:
+            val = v.default
+        """
         else:
             if 'detector' in k: # including 'detectors'
+                
                 val = '['
               
                 for det in v.default:
@@ -4225,7 +4231,10 @@ def convert_fun_dict(fun_name):
                 val = val.rstrip(' ').rstrip(',') + ']'
                 val = f'"{val}"'
             else:
+            
                 val = v.default
+        """
+
         l = f"'{k}': {str(val)}, "
         lines.append(space4 * 2 + l)
     lines.append(space4 * 2 + "'introduction': ''' Description:\n '''")

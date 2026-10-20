@@ -1,7 +1,7 @@
 def fxi_load_scan_list_common():
     scan_list = {}
     txm_delay_scan = {
-        'detectors': [], 
+        'detectors': [None], 
         'motor': None, 
         'start': None, 
         'stop': None, 
@@ -20,7 +20,7 @@ def fxi_load_scan_list_common():
         'start': None, 
         'stop': None, 
         'num': 1, 
-        'detectors': "[]", 
+        'detectors': [], 
         'delay_time': 1, 
         'introduction': ''' Description:
  '''
@@ -48,7 +48,7 @@ def fxi_load_scan_list_common():
         'take_bkg_img': True, 
         'take_dark_img': True, 
         'close_shutter_finish': True, 
-        'detectors': "[KinetixU]", 
+        'detectors': None, 
         'introduction': ''' Description:
  '''
     }
@@ -263,6 +263,7 @@ def fxi_load_scan_list_common():
         'relative_move_flag': 1, 
         'rot_first_flag': 1, 
         'simu': False, 
+        'detectors': None, 
         'introduction': ''' Description:
  '''
     }
@@ -320,6 +321,7 @@ def fxi_load_scan_list_common():
         'simu': False, 
         'return_ini': True, 
         'mag': None, 
+        'detectors': None, 
         'introduction': ''' Description:
  '''
     }
